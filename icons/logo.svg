@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 458 456" width="100%">
+  <!-- Outer ring -->
+  <circle cx="229" cy="228" r="220.5" fill="none" stroke="#000000" stroke-width="15"/>
+
+  <!-- M with downward arrow (single clean path, no seams) -->
+  <path fill="#000000" d="
+    M 108,91
+    H 232
+    Q 238,91 238,97
+    V 180
+    L 319,91
+    H 371
+    Q 377,91 377,97
+    V 257
+    L 385,265
+    H 416
+    L 348,361.5
+    L 280,265
+    H 311
+    L 319,257
+    V 177
+    L 239,276
+    L 196,217
+    V 144
+    Q 196,137 189,137
+    H 143
+    C 126,137 108,122 103,100
+    Q 101,91 108,91
+    Z"/>
+
+  <!-- Chevron mark (rotated to point upwards) -->
+  <g stroke="#000000" stroke-width="38" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 88,210 L 130,168 L 172,210"/>
+    <path d="M 88,281 L 130,239 L 172,281"/>
+    <path d="M 88,352 L 130,310 L 172,352"/>
+  </g>
+</svg>
