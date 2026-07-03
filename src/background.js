@@ -32,7 +32,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.action === 'download') {
     chrome.downloads.download(
       {
-        url: msg.dataUrl,
+        // `url` may be a data: URL (the generated Markdown) or a remote
+        // https: attachment URL. Native downloads use the browser cookie jar
+        // and follow redirects without CORS restrictions — which is why
+        // attachments are downloaded here rather than fetched in-page.
+        url: msg.url || msg.dataUrl,
         filename: sanitizeFilename(msg.filename),
         saveAs: false,
       },

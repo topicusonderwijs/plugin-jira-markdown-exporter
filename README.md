@@ -12,7 +12,7 @@ It is a transparent, no-telemetry alternative to closed-source exporters such as
 - ✅ **100% local.** Nothing is ever sent to a third-party server.
 - ✅ **Auditable.** Vanilla JS, no build step, no minified blobs.
 - ✅ **ADF-aware.** Faithful Atlassian Document Format → Markdown conversion.
-- ✅ **Attachment bundling.** Optionally download `{ISSUE}.zip` with images/files.
+- ✅ **Attachment download.** Optionally save attachments into a `{ISSUE}/` folder.
 - ✅ **Fallback mode.** DOM scraping when the REST API is unavailable.
 
 ---
@@ -29,7 +29,11 @@ It is a transparent, no-telemetry alternative to closed-source exporters such as
    [`src/adfToMarkdown.js`](src/adfToMarkdown.js) and assembled into a full
    document by [`src/jiraToMarkdown.js`](src/jiraToMarkdown.js).
 4. The popup offers **Copy to Clipboard** and **Download `.md`** (with an
-   optional **Bundle attachments (.zip)** toggle).
+   optional **Attachments** toggle that saves each attachment into a
+   `{ISSUE}/` folder). Attachments are downloaded natively by the background
+   worker via `chrome.downloads` — Jira's attachment URLs redirect to a media
+   CDN that blocks cross-origin `fetch`, so they can't be bundled into a `.zip`
+   in the page, but a native download (cookies + redirects, no CORS) works.
 
 ```
 Popup ──"export"──▶ Content script (same-origin fetch, cookies)
@@ -67,7 +71,8 @@ No build step is required; the extension ships as plain files.
 | --- | --- |
 | `host_permissions: https://*.atlassian.net/*` | Run the content script on Jira Cloud and read issue data from its API. |
 | `activeTab` | Let the popup talk to the issue tab you explicitly opened it on. |
-| `downloads` | Save the generated `.md` / `.zip` file. |
+| `scripting` | Inject the content script on demand if the tab was open before the extension loaded (so you don't have to reload the tab). |
+| `downloads` | Save the generated `.md` file and download attachments. |
 | `clipboardWrite` | "Copy to Clipboard" action. |
 | `optional_host_permissions: https://*/*` | Requested **only** if you enable Data Center support for a self-hosted domain (see below). Not granted by default. |
 
@@ -105,9 +110,9 @@ jira-markdown-exporter/
 │   ├── adfToMarkdown.js       # ⭐ standalone ADF → Markdown converter (UMD, unit-tested)
 │   ├── jiraToMarkdown.js      # assembles a full issue into one Markdown doc
 │   ├── domScraper.js          # DOM-scraping fallback for restricted instances
-│   ├── zip.js                 # dependency-free ZIP (STORE) writer for attachment bundles
 │   ├── popup.html/.css/.js    # popup UI + export options
 ├── icons/                     # generated PNG icons (16/48/128)
+├── docs/popup-preview.html    # standalone design preview of the popup (open in a browser)
 ├── tools/generate-icons.js    # regenerates icons with zero deps
 ├── test/                      # node:test unit tests (no deps)
 ├── package.json

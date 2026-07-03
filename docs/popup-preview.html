@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jira Markdown Exporter — Popup Design Preview</title>
+</head>
+<body>
+<style>
+  :root {
+    --blue: #0052cc;
+    --blue-600: #0747a6;
+    --blue-tint: #e9f2ff;
+    --bg: #ffffff;
+    --bg-elev: #f7f8fa;
+    --fg: #172b4d;
+    --fg-muted: #5e6c84;
+    --border: #e4e7ec;
+    --track: #c1c7d0;
+    --green-bg: #dcfff1;
+    --green-fg: #006644;
+    --blue-bg: #deebff;
+    --blue-fg: #0052cc;
+    --gray-bg: #dfe1e6;
+    --gray-fg: #42526e;
+    --shadow: 0 1px 2px rgba(9, 30, 66, 0.08), 0 10px 30px rgba(9, 30, 66, 0.14);
+
+    --stage: #eef1f6;
+    --stage-fg: #44506a;
+    --stage-dot: #d9dee8;
+  }
+
+  :root[data-theme="dark"] {
+    --blue: #579dff; --blue-600: #85b8ff; --blue-tint: #1c2b41;
+    --bg: #1d2125; --bg-elev: #22272b; --fg: #c7d1db; --fg-muted: #9fadbc;
+    --border: #2c333a; --track: #454f59;
+    --green-bg: #164b35; --green-fg: #7ee2b8; --blue-bg: #1c3a5e; --blue-fg: #85b8ff;
+    --gray-bg: #2c333a; --gray-fg: #9fadbc;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 34px rgba(0,0,0,.5);
+    --stage: #15181c; --stage-fg: #9fadbc; --stage-dot: #262c33;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --blue: #579dff; --blue-600: #85b8ff; --blue-tint: #1c2b41;
+      --bg: #1d2125; --bg-elev: #22272b; --fg: #c7d1db; --fg-muted: #9fadbc;
+      --border: #2c333a; --track: #454f59;
+      --green-bg: #164b35; --green-fg: #7ee2b8; --blue-bg: #1c3a5e; --blue-fg: #85b8ff;
+      --gray-bg: #2c333a; --gray-fg: #9fadbc;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 34px rgba(0,0,0,.5);
+      --stage: #15181c; --stage-fg: #9fadbc; --stage-dot: #262c33;
+    }
+  }
+  :root[data-theme="light"] {
+    --blue: #0052cc; --blue-600: #0747a6; --blue-tint: #e9f2ff;
+    --bg: #ffffff; --bg-elev: #f7f8fa; --fg: #172b4d; --fg-muted: #5e6c84;
+    --border: #e4e7ec; --track: #c1c7d0;
+    --green-bg: #dcfff1; --green-fg: #006644; --blue-bg: #deebff; --blue-fg: #0052cc;
+    --gray-bg: #dfe1e6; --gray-fg: #42526e;
+    --shadow: 0 1px 2px rgba(9,30,66,.08), 0 10px 30px rgba(9,30,66,.14);
+    --stage: #eef1f6; --stage-fg: #44506a; --stage-dot: #d9dee8;
+  }
+
+  * { box-sizing: border-box; }
+
+  .stage {
+    min-height: 100%;
+    margin: 0;
+    padding: 40px 24px 56px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--stage-fg);
+    background-color: var(--stage);
+    background-image: radial-gradient(var(--stage-dot) 1.2px, transparent 1.2px);
+    background-size: 18px 18px;
+  }
+
+  .stage-head {
+    max-width: 900px;
+    margin: 0 auto 28px;
+    text-align: center;
+  }
+  .stage-head .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin: 0 0 6px;
+  }
+  .stage-head h1 {
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+  }
+  .stage-head p { margin: 0; font-size: 13px; }
+
+  .gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px 28px;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .frame { width: 360px; }
+  .frame .caption {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--stage-fg);
+    margin-top: 12px;
+    opacity: 0.8;
+  }
+
+  /* ============ the actual popup ============ */
+  .popup {
+    width: 360px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--fg);
+    background: var(--bg);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+  }
+
+  .pop-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, var(--blue), var(--blue-600));
+    color: #fff;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 13px; }
+  .brand-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 6px;
+    background: rgba(255,255,255,.22); font-size: 12px; font-weight: 800;
+  }
+  .brand-arrow { font-size: 10px; margin-left: 1px; }
+  .badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.2); color: #fff;
+  }
+  .badge.warn { background: #ffab00; color: #172b4d; }
+
+  .issue-card { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
+  .key-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 8px; }
+  .issue-key {
+    font-weight: 700; font-size: 12px; letter-spacing: .02em; color: var(--blue);
+    text-decoration: none; padding: 2px 7px; border-radius: 5px; background: var(--blue-tint);
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+  }
+  .chip-type { background: var(--bg-elev); color: var(--fg-muted); border: 1px solid var(--border); }
+  .chip-type .ic {
+    width: 13px; height: 13px; border-radius: 2px; background: #6554c0; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800;
+  }
+  .chip-status[data-category="done"] { background: var(--green-bg); color: var(--green-fg); }
+  .chip-status[data-category="indeterminate"] { background: var(--blue-bg); color: var(--blue-fg); }
+  .chip-status[data-category="new"] { background: var(--gray-bg); color: var(--gray-fg); }
+
+  .issue-summary {
+    margin: 0 0 10px; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--fg);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .stats { display: flex; gap: 16px; color: var(--fg-muted); font-size: 12px; }
+  .stat { display: inline-flex; align-items: center; gap: 5px; }
+  .stat svg { opacity: .8; }
+  .stat b { color: var(--fg); font-weight: 700; }
+
+  .options { padding: 12px 14px 6px; }
+  .section-title {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--fg-muted); margin-bottom: 4px;
+  }
+  .toggle { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; cursor: pointer; user-select: none; }
+  .toggle-label { font-size: 13px; }
+  .hint { color: var(--fg-muted); font-weight: 400; }
+  .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .track { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--track); transition: background .18s ease; flex: none; }
+  .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .18s ease; }
+  .toggle input:checked + .track { background: var(--blue); }
+  .toggle input:checked + .track .knob { transform: translateX(14px); }
+  .toggle input:focus-visible + .track { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .toggle.disabled { opacity: .45; cursor: default; }
+
+  .actions { display: flex; gap: 9px; padding: 10px 14px 14px; }
+  .btn {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9px 12px; font-size: 13px; font-weight: 600; color: var(--fg);
+    background: var(--bg-elev); border: 1px solid var(--border); border-radius: 7px; cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .05s ease;
+  }
+  .btn:hover { border-color: var(--blue); }
+  .btn:active { transform: translateY(1px); }
+  .btn svg { opacity: .85; }
+  .btn-primary { color: #fff; background: var(--blue); border-color: var(--blue); }
+  .btn-primary:hover { background: var(--blue-600); border-color: var(--blue-600); }
+  .btn-primary svg { opacity: 1; }
+
+  .pop-footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 14px; border-top: 1px solid var(--border); background: var(--bg-elev);
+  }
+  .msg { font-size: 11.5px; color: var(--fg-muted); }
+  .msg.ok { color: var(--green-fg); font-weight: 600; }
+  .repo { font-size: 10.5px; color: var(--fg-muted); text-decoration: none; }
+
+  /* loading state */
+  .state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 20px; color: var(--fg-muted); text-align: center; }
+  .state p { margin: 0; }
+  .spinner { width: 26px; height: 26px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+</style>
+
+<div class="stage">
+  <div class="stage-head">
+    <p class="eyebrow">Extension popup — design preview</p>
+    <h1>Jira Markdown Exporter</h1>
+    <p>Live, interactive mock with EFK-3351 data. Toggles work; use the theme switch to check dark mode.</p>
+  </div>
+
+  <div class="gallery">
+
+    <!-- Populated (REST API) -->
+    <div class="frame">
+      <div class="popup">
+        <div class="pop-header">
+          <div class="brand">
+            <span class="brand-mark">M<span class="brand-arrow">↓</span></span>
+            <span class="brand-name">Jira&nbsp;→&nbsp;Markdown</span>
+          </div>
+          <span class="badge">REST API</span>
+        </div>
+
+        <div class="issue-card">
+          <div class="key-row">
+            <a class="issue-key" href="#" onclick="return false">EFK-3351</a>
+            <span class="chip chip-type"><span class="ic">▣</span>Story</span>
+            <span class="chip chip-status" data-category="indeterminate">In Progress</span>
+          </div>
+          <h2 class="issue-summary">Test Automation | AI-agent die E2E-tests genereert en PR's aanmaakt</h2>
+          <div class="stats">
+            <span class="stat">
+              <svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2z"/></svg>
+              <b>4</b>&nbsp;comments
+            </span>
+            <span class="stat">
+              <svg viewBox="0 0 24 24" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m21.44 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>
+              <b>2</b>&nbsp;attachments
+            </span>
+          </div>
+        </div>
+
+        <div class="options">
+          <div class="section-title">Include in export</div>
+          <label class="toggle"><span class="toggle-label">Comments</span><input type="checkbox" checked /><span class="track"><span class="knob"></span></span></label>
+          <label class="toggle"><span class="toggle-label">Custom fields</span><input type="checkbox" checked /><span class="track"><span class="knob"></span></span></label>
+          <label class="toggle"><span class="toggle-label">Bundle attachments <span class="hint">(.zip)</span></span><input type="checkbox" /><span class="track"><span class="knob"></span></span></label>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 9V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4M5 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/></svg>
+            Copy
+          </button>
+          <button class="btn">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download
+          </button>
+        </div>
+
+        <div class="pop-footer">
+          <span class="msg ok">Ready · 128 lines of Markdown</span>
+          <a class="repo" href="#" onclick="return false">open source · no telemetry</a>
+        </div>
+      </div>
+      <div class="caption">Populated · REST API</div>
+    </div>
+
+    <!-- DOM fallback + Done status -->
+    <div class="frame">
+      <div class="popup">
+        <div class="pop-header">
+          <div class="brand">
+            <span class="brand-mark">M<span class="brand-arrow">↓</span></span>
+            <span class="brand-name">Jira&nbsp;→&nbsp;Markdown</span>
+          </div>
+          <span class="badge warn">DOM fallback</span>
+        </div>
+
+        <div class="issue-card">
+          <div class="key-row">
+            <a class="issue-key" href="#" onclick="return false">OPS-118</a>
+            <span class="chip chip-type"><span class="ic" style="background:#00875a">✓</span>Task</span>
+            <span class="chip chip-status" data-category="done">Done</span>
+          </div>
+          <h2 class="issue-summary">Rotate service-desk API credentials and document the runbook</h2>
+          <div class="stats">
+            <span class="stat">
+              <svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2z"/></svg>
+              <b>1</b>&nbsp;comments
+            </span>
+            <span class="stat">
+              <svg viewBox="0 0 24 24" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m21.44 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>
+              <b>0</b>&nbsp;attachments
+            </span>
+          </div>
+        </div>
+
+        <div class="options">
+          <div class="section-title">Include in export</div>
+          <label class="toggle"><span class="toggle-label">Comments</span><input type="checkbox" checked /><span class="track"><span class="knob"></span></span></label>
+          <label class="toggle"><span class="toggle-label">Custom fields</span><input type="checkbox" checked /><span class="track"><span class="knob"></span></span></label>
+          <label class="toggle disabled"><span class="toggle-label">Bundle attachments <span class="hint">(.zip)</span></span><input type="checkbox" disabled /><span class="track"><span class="knob"></span></span></label>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 9V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4M5 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/></svg>
+            Copy
+          </button>
+          <button class="btn">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download
+          </button>
+        </div>
+
+        <div class="pop-footer">
+          <span class="msg">REST API unavailable; used DOM scraping</span>
+          <a class="repo" href="#" onclick="return false">open source</a>
+        </div>
+      </div>
+      <div class="caption">DOM fallback · Done status</div>
+    </div>
+
+    <!-- Loading -->
+    <div class="frame">
+      <div class="popup">
+        <div class="pop-header">
+          <div class="brand">
+            <span class="brand-mark">M<span class="brand-arrow">↓</span></span>
+            <span class="brand-name">Jira&nbsp;→&nbsp;Markdown</span>
+          </div>
+        </div>
+        <div class="state">
+          <div class="spinner"></div>
+          <p>Reading issue…</p>
+        </div>
+      </div>
+      <div class="caption">Loading state</div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

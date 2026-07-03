@@ -7,43 +7,90 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <header>
-      <h1>Jira Markdown Exporter</h1>
+    <header class="pop-header">
+      <div class="brand">
+        <span class="brand-mark">M<span class="brand-arrow">↓</span></span>
+        <span class="brand-name">Jira&nbsp;→&nbsp;Markdown</span>
+      </div>
       <span id="source-badge" class="badge hidden"></span>
     </header>
 
-    <div id="status" class="status">Detecting issue…</div>
+    <!-- Empty / loading / error state -->
+    <div id="state" class="state">
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="state-text">Detecting issue…</p>
+    </div>
 
-    <div id="controls" class="controls hidden">
-      <label class="opt">
+    <!-- Issue card -->
+    <section id="issue-card" class="issue-card hidden">
+      <div class="key-row">
+        <a id="issue-key" class="issue-key" target="_blank" rel="noopener"></a>
+        <span id="type-chip" class="chip chip-type hidden"></span>
+        <span id="status-chip" class="chip chip-status hidden"></span>
+      </div>
+
+      <h2 id="issue-summary" class="issue-summary"></h2>
+
+      <div class="stats">
+        <span class="stat" id="stat-comments" title="Comments">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2z" />
+          </svg>
+          <b id="comment-count">0</b><span class="stat-label">&nbsp;comments</span>
+        </span>
+        <span class="stat" id="stat-attachments" title="Attachments">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              d="m21.44 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49" />
+          </svg>
+          <b id="attachment-count">0</b><span class="stat-label">&nbsp;attachments</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- Options -->
+    <section id="options" class="options hidden">
+      <div class="section-title">Include in export</div>
+      <label class="toggle">
+        <span class="toggle-label">Comments</span>
         <input type="checkbox" id="opt-comments" checked />
-        Include comments
+        <span class="track"><span class="knob"></span></span>
       </label>
-      <label class="opt">
+      <label class="toggle">
+        <span class="toggle-label">Custom fields</span>
         <input type="checkbox" id="opt-customfields" checked />
-        Include custom fields
+        <span class="track"><span class="knob"></span></span>
       </label>
-      <label class="opt">
+      <label class="toggle" id="row-attachments">
+        <span class="toggle-label">Attachments <span class="hint">(into <span id="att-folder">issue</span>/ folder)</span></span>
         <input type="checkbox" id="opt-attachments" />
-        Bundle attachments (.zip)
+        <span class="track"><span class="knob"></span></span>
       </label>
-    </div>
+    </section>
 
-    <div id="preview-wrap" class="hidden">
-      <textarea id="preview" readonly spellcheck="false"></textarea>
-    </div>
-
+    <!-- Actions -->
     <div id="actions" class="actions hidden">
-      <button id="btn-copy" class="primary">⧉ Copy to Clipboard</button>
-      <button id="btn-download">⭳ Download .md</button>
+      <button id="btn-copy" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            d="M9 9V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4M5 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" />
+        </svg>
+        Copy
+      </button>
+      <button id="btn-download" class="btn">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+        </svg>
+        Download
+      </button>
     </div>
 
-    <footer>
+    <footer class="pop-footer">
       <span id="msg" class="msg"></span>
       <a href="#" id="link-repo" class="repo">open source · no telemetry</a>
     </footer>
 
-    <script src="zip.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

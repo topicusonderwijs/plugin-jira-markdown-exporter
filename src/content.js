@@ -118,6 +118,28 @@
     throw lastError || new Error('Failed to reach the Jira REST API.');
   }
 
+  // Extract the lightweight fields the popup shows as chips/counts, so it can
+  // render an issue summary without re-parsing the whole payload.
+  function buildMeta(f, attachments) {
+    const person = (u) => (u ? u.displayName || u.name || null : null);
+    const commentCount =
+      f.comment && (f.comment.total != null ? f.comment.total : (f.comment.comments || []).length);
+    return {
+      summary: f.summary || '',
+      type: f.issuetype ? { name: f.issuetype.name, iconUrl: f.issuetype.iconUrl } : null,
+      status: f.status
+        ? {
+            name: f.status.name,
+            category: (f.status.statusCategory && f.status.statusCategory.key) || 'new',
+          }
+        : null,
+      priority: f.priority ? { name: f.priority.name, iconUrl: f.priority.iconUrl } : null,
+      assignee: person(f.assignee),
+      commentCount: commentCount || 0,
+      attachmentCount: (attachments && attachments.length) || 0,
+    };
+  }
+
   // Produce Markdown for an issue key. Tries the API, then DOM scraping.
   async function exportIssue(key, options) {
     options = options || {};
@@ -138,6 +160,7 @@
         source: `api-v${version}`,
         key: json.key || key,
         markdown,
+        meta: buildMeta(json.fields || {}, attachments),
         attachments: attachments.map((a) => ({
           id: a.id,
           filename: a.filename,
@@ -155,6 +178,7 @@
           source: 'dom-scrape',
           key: scraped.key,
           markdown: scraped.markdown,
+          meta: scraped.meta || {},
           attachments: [],
           warning: `REST API unavailable (${apiError.message}); used DOM scraping fallback.`,
         };
@@ -167,38 +191,12 @@
     }
   }
 
-  // Download attachment bytes (same-origin, with cookies) and return them as
-  // base64 so they can be transferred to the popup for zipping.
-  async function fetchAttachments(attachments) {
-    const results = [];
-    for (const att of attachments || []) {
-      if (!att.url) continue;
-      try {
-        const res = await fetch(att.url, { credentials: 'include' });
-        if (!res.ok) throw new Error(`${res.status}`);
-        const buf = await res.arrayBuffer();
-        results.push({
-          filename: att.filename || `attachment-${att.id}`,
-          base64: arrayBufferToBase64(buf),
-        });
-      } catch (err) {
-        results.push({ filename: att.filename, error: String(err) });
-      }
-    }
-    return results;
-  }
-
-  function arrayBufferToBase64(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-    }
-    return btoa(binary);
-  }
-
   // ---- messaging with the popup ---------------------------------------------
+  //
+  // Note: attachment binaries are downloaded natively by the background worker
+  // via chrome.downloads (cookies + redirects, no CORS). We deliberately do NOT
+  // fetch them here — Jira's attachment URLs redirect to a media CDN that
+  // blocks cross-origin fetch, so in-page fetching always fails.
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
@@ -207,8 +205,6 @@
           sendResponse({ ok: true, context: getContext() });
         } else if (msg.action === 'export') {
           sendResponse(await exportIssue(msg.key, msg.options));
-        } else if (msg.action === 'fetchAttachments') {
-          sendResponse({ ok: true, files: await fetchAttachments(msg.attachments) });
         } else {
           sendResponse({ ok: false, error: `Unknown action: ${msg.action}` });
         }
@@ -223,21 +219,38 @@
 
   let injecting = false;
 
+  // Inline SVG icons (no emoji). All use currentColor so they inherit the
+  // button's white text colour. 16px, stroke-based (Lucide-style).
+  const ICONS = {
+    copy:
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    spinner:
+      '<svg class="jme-spin" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
+    check:
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    alert:
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>',
+  };
+
+  function setButtonState(btn, icon, label) {
+    btn.querySelector('.jme-ic').innerHTML = icon;
+    btn.querySelector('.jme-label').textContent = label;
+  }
+
   async function copyMarkdownFromButton(btn) {
-    const original = btn.textContent;
-    btn.textContent = '⏳ Exporting…';
+    setButtonState(btn, ICONS.spinner, 'Exporting…');
     btn.disabled = true;
     try {
       const result = await exportIssue(null, {});
       if (!result.ok) throw new Error(result.error);
       await navigator.clipboard.writeText(result.markdown);
-      btn.textContent = '✅ Copied!';
+      setButtonState(btn, ICONS.check, 'Copied!');
     } catch (err) {
-      btn.textContent = '⚠️ Failed';
+      setButtonState(btn, ICONS.alert, 'Failed');
       console.error('[Jira Markdown Exporter]', err);
     } finally {
       setTimeout(() => {
-        btn.textContent = original;
+        setButtonState(btn, ICONS.copy, 'Copy Markdown');
         btn.disabled = false;
       }, 2000);
     }
@@ -261,7 +274,9 @@
   font-style: normal;
   font-family: inherit;
   font-weight: 600;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: 10px;
   padding: 10px 10px;
   line-height: 1;
@@ -275,6 +290,10 @@
 }
 .CopyBtnForJira:hover { background-color: rgb(7, 71, 166); }
 .CopyBtnForJira:disabled { opacity: 0.6; cursor: default; }
+.CopyBtnForJira .jme-ic { display: inline-flex; }
+.CopyBtnForJira .jme-spin { animation: jme-rotate 0.7s linear infinite; }
+@keyframes jme-rotate { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .CopyBtnForJira .jme-spin { animation: none; } }
 `;
     (document.head || document.documentElement).appendChild(style);
   }
@@ -285,8 +304,8 @@
     btn.id = 'jme-copy-md-btn';
     btn.className = 'CopyBtnForJira';
     btn.type = 'button';
-    btn.textContent = '⧉ Copy Markdown';
     btn.title = 'Copy this Jira issue as Markdown';
+    btn.innerHTML = `<span class="jme-ic">${ICONS.copy}</span><span class="jme-label">Copy Markdown</span>`;
     btn.addEventListener('click', () => copyMarkdownFromButton(btn));
     return btn;
   }

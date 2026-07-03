@@ -166,7 +166,18 @@
     }
 
     const markdown = out.join('\n\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
-    return { key: key || 'issue', markdown, scraped: true };
+    return {
+      key: key || 'issue',
+      markdown,
+      scraped: true,
+      meta: {
+        summary,
+        status: status ? { name: status, category: 'new' } : null,
+        assignee: assignee || null,
+        commentCount: commentEls.length,
+        attachmentCount: 0,
+      },
+    };
   }
 
   root.JiraDomScraper = { scrapeIssue, htmlToMarkdown };
