@@ -73,20 +73,11 @@ body {
 }
 
 .brand-mark {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.22);
-  font-size: 12px;
-  font-weight: 800;
-}
-.brand-arrow {
-  font-size: 10px;
-  margin-left: 1px;
+  background: #fff;
+  object-fit: contain;
 }
 .brand-name {
   color: #fff;
