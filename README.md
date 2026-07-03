@@ -80,9 +80,6 @@ The extension ships as plain files — no build step.
    `manifest.json`).
 5. Open any Jira Cloud issue and click the extension icon.
 
-> Regenerating icons is optional (`npm run icons`) and only needed if you edit
-> them.
-
 ## Usage
 
 1. Open a Jira Cloud issue — a full page (`…/browse/ABC-123`) or the board/backlog
@@ -179,7 +176,6 @@ No dependencies, no bundler. Requires Node ≥ 18 for the tests.
 
 ```bash
 npm test        # run unit tests (node:test) — no deps
-npm run icons   # regenerate the PNG icons
 ```
 
 Tests live in [`test/`](test/) and cover the ADF converter and the full-issue
@@ -235,4 +231,4 @@ before opening a PR.
 
 ## License
 
-[MIT](LICENSE) © 2026 Topicus.Education BV. Built by Adnan al Jawabra.
+[MIT](LICENSE) © 2026 Topicus.Education BV. Built by Adnan al Jawabra and Pim Jansen.
