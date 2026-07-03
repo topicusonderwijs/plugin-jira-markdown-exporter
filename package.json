@@ -1,0 +1,29 @@
+{
+  "name": "plugin-jira-markdown-exporter",
+  "version": "1.0.0",
+  "description": "Open-source Manifest V3 Chrome extension that exports Jira Cloud issues to clean Markdown. No telemetry, no API tokens — uses your existing browser session.",
+  "license": "MIT",
+  "author": "Adnan al Jawabra",
+  "homepage": "https://github.com/topicusonderwijs/plugin-jira-markdown-exporter",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/topicusonderwijs/plugin-jira-markdown-exporter.git"
+  },
+  "keywords": [
+    "jira",
+    "markdown",
+    "chrome-extension",
+    "adf",
+    "atlassian",
+    "export"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "icons": "node tools/generate-icons.js",
+    "zip": "cd \"$(dirname \"$0\")\" 2>/dev/null; zip -r -FS dist/jira-markdown-exporter.zip manifest.json src icons -x '*.DS_Store' && echo 'Packaged dist/jira-markdown-exporter.zip'"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}

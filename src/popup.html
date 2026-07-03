@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jira Markdown Exporter</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Jira Markdown Exporter</h1>
+      <span id="source-badge" class="badge hidden"></span>
+    </header>
+
+    <div id="status" class="status">Detecting issue…</div>
+
+    <div id="controls" class="controls hidden">
+      <label class="opt">
+        <input type="checkbox" id="opt-comments" checked />
+        Include comments
+      </label>
+      <label class="opt">
+        <input type="checkbox" id="opt-customfields" checked />
+        Include custom fields
+      </label>
+      <label class="opt">
+        <input type="checkbox" id="opt-attachments" />
+        Bundle attachments (.zip)
+      </label>
+    </div>
+
+    <div id="preview-wrap" class="hidden">
+      <textarea id="preview" readonly spellcheck="false"></textarea>
+    </div>
+
+    <div id="actions" class="actions hidden">
+      <button id="btn-copy" class="primary">⧉ Copy to Clipboard</button>
+      <button id="btn-download">⭳ Download .md</button>
+    </div>
+
+    <footer>
+      <span id="msg" class="msg"></span>
+      <a href="#" id="link-repo" class="repo">open source · no telemetry</a>
+    </footer>
+
+    <script src="zip.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
