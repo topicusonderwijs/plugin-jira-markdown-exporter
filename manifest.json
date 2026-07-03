@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Export Jira Cloud issues to clean Markdown. Open source, no telemetry, uses your existing Jira session.",
   "homepage_url": "https://github.com/topicusonderwijs/plugin-jira-markdown-exporter",
-  "permissions": ["activeTab", "scripting", "downloads", "clipboardWrite"],
+  "permissions": ["activeTab", "scripting", "downloads", "clipboardWrite", "storage"],
   "host_permissions": ["https://*.atlassian.net/*"],
   "optional_host_permissions": ["https://*/*"],
   "background": {

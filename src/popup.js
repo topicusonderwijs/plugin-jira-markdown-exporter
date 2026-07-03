@@ -139,6 +139,45 @@
     };
   }
 
+  // ---- persisted option preferences -----------------------------------------
+  // Remember how the user left the toggles, so they stay that way next time.
+  const PREFS_KEY = 'exportPrefs';
+  const DEFAULT_PREFS = {
+    includeComments: true,
+    includeCustomFields: true,
+    includeAttachments: false,
+  };
+
+  // Source of truth for the attachments preference. The checkbox gets force-
+  // disabled/unchecked on issues that have no attachments, so we can't read the
+  // user's actual intent back off the DOM — we keep it here instead.
+  let attachmentPref = DEFAULT_PREFS.includeAttachments;
+
+  function loadPrefs() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(PREFS_KEY, (data) => {
+        if (chrome.runtime.lastError) return resolve({ ...DEFAULT_PREFS });
+        resolve({ ...DEFAULT_PREFS, ...((data && data[PREFS_KEY]) || {}) });
+      });
+    });
+  }
+
+  function savePrefs() {
+    const prefs = {
+      includeComments: el('opt-comments').checked,
+      includeCustomFields: el('opt-customfields').checked,
+      includeAttachments: attachmentPref,
+    };
+    chrome.storage.local.set({ [PREFS_KEY]: prefs });
+  }
+
+  function applyPrefs(prefs) {
+    el('opt-comments').checked = !!prefs.includeComments;
+    el('opt-customfields').checked = !!prefs.includeCustomFields;
+    attachmentPref = !!prefs.includeAttachments;
+    el('opt-attachments').checked = attachmentPref;
+  }
+
   // ---- rendering ------------------------------------------------------------
 
   function renderIssue() {
@@ -198,7 +237,9 @@
     const hasAtt = state.attachments.length > 0;
     attToggle.disabled = !hasAtt;
     attRow.classList.toggle('disabled', !hasAtt);
-    if (!hasAtt) attToggle.checked = false;
+    // Reflect the saved preference when attachments exist; force off (display
+    // only) when there are none — without touching the stored preference.
+    attToggle.checked = hasAtt ? attachmentPref : false;
     el('att-folder').textContent = state.key || 'issue';
   }
 
@@ -320,13 +361,28 @@
 
   btnCopy.addEventListener('click', onCopy);
   btnDownload.addEventListener('click', onDownload);
-  el('opt-comments').addEventListener('change', runExport);
-  el('opt-customfields').addEventListener('change', runExport);
+  // Comments / custom fields change the generated Markdown → persist + re-export.
+  el('opt-comments').addEventListener('change', () => {
+    savePrefs();
+    runExport();
+  });
+  el('opt-customfields').addEventListener('change', () => {
+    savePrefs();
+    runExport();
+  });
+  // Attachments only affects download, not the Markdown → update intent + persist.
+  el('opt-attachments').addEventListener('change', () => {
+    attachmentPref = el('opt-attachments').checked;
+    savePrefs();
+  });
 
   // ---- bootstrap ------------------------------------------------------------
 
   (async function init() {
     showLoading('Detecting issue…');
+    // Restore the toggles to how the user last left them before exporting.
+    applyPrefs(await loadPrefs());
+
     const tab = await getActiveTab();
     if (!tab || !tab.id) {
       showError('No active tab.');

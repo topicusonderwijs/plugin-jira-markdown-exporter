@@ -74,6 +74,7 @@ No build step is required; the extension ships as plain files.
 | `scripting` | Inject the content script on demand if the tab was open before the extension loaded (so you don't have to reload the tab). |
 | `downloads` | Save the generated `.md` file and download attachments. |
 | `clipboardWrite` | "Copy to Clipboard" action. |
+| `storage` | Remember your export toggles (comments / custom fields / attachments) between sessions. |
 | `optional_host_permissions: https://*/*` | Requested **only** if you enable Data Center support for a self-hosted domain (see below). Not granted by default. |
 
 There is no `storage`, no analytics, no remote code. Read the source — it's
