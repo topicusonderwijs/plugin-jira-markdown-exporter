@@ -1,185 +1,238 @@
+<div align="center">
+
 # Jira Markdown Exporter
 
-A free, open-source (MIT) **Manifest V3 Chrome extension** that exports Jira
-Cloud issues to clean **Markdown**. Open an issue, click the extension icon, and
-copy or download the whole issue — description, comments, custom fields,
-attachments — as a portable `.md` file.
+**Export any Jira Cloud issue to clean, portable Markdown — with one click.**
 
-It is a transparent, no-telemetry alternative to closed-source exporters such as
-"Jira Export Markdown".
+Open source, no telemetry, no API tokens. It uses your existing Jira browser session and does everything locally.
 
-- ✅ **No API tokens.** Authenticates with your existing Jira browser session.
-- ✅ **100% local.** Nothing is ever sent to a third-party server.
-- ✅ **Auditable.** Vanilla JS, no build step, no minified blobs.
-- ✅ **ADF-aware.** Faithful Atlassian Document Format → Markdown conversion.
-- ✅ **Attachment download.** Optionally save attachments into a `{ISSUE}/` folder.
-- ✅ **Fallback mode.** DOM scraping when the REST API is unavailable.
+[![License: MIT](https://img.shields.io/badge/License-MIT-0052CC.svg)](LICENSE)
+[![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-0052CC.svg)](manifest.json)
+[![No telemetry](https://img.shields.io/badge/telemetry-none-006644.svg)](#privacy--security)
+[![Tests](https://img.shields.io/badge/tests-node%3Atest-006644.svg)](test/)
+[![No build step](https://img.shields.io/badge/build-none-42526E.svg)](#development)
+
+</div>
 
 ---
 
-## How it works
+## Contents
 
-1. A content script runs on `*.atlassian.net` and detects the current issue key
-   from the tab URL (`/browse/EFK-549`, board `?selectedIssue=…`, etc.).
-2. Because that script runs **same-origin** with the Jira tab, it calls
-   `GET /rest/api/3/issue/{key}?expand=names,renderedFields` with
-   `credentials: "include"` — your logged-in session cookies authenticate the
-   request automatically. No token entry, no OAuth dance.
-3. The returned **Atlassian Document Format (ADF)** is converted to Markdown by
-   [`src/adfToMarkdown.js`](src/adfToMarkdown.js) and assembled into a full
-   document by [`src/jiraToMarkdown.js`](src/jiraToMarkdown.js).
-4. The popup offers **Copy to Clipboard** and **Download `.md`** (with an
-   optional **Attachments** toggle that saves each attachment into a
-   `{ISSUE}/` folder). Attachments are downloaded natively by the background
-   worker via `chrome.downloads` — Jira's attachment URLs redirect to a media
-   CDN that blocks cross-origin `fetch`, so they can't be bundled into a `.zip`
-   in the page, but a native download (cookies + redirects, no CORS) works.
-
-```
-Popup ──"export"──▶ Content script (same-origin fetch, cookies)
-  ▲                        │
-  │◀── markdown + meta ─────┘
-  │
-  └──"download"──▶ Background worker ──▶ chrome.downloads
-```
-
-All cookie-authenticated network access happens **only** in the content script.
-The popup and background worker never touch Jira directly, which keeps the
-permission surface minimal.
+- [Why](#why)
+- [Features](#features)
+- [Install](#install-unpacked)
+- [Usage](#usage)
+- [How it works](#how-it-works)
+- [Privacy & security](#privacy--security)
+- [Permissions](#permissions)
+- [Jira Data Center / Server](#jira-data-center--server)
+- [Development](#development)
+- [Project structure](#project-structure)
+- [How this differs from closed-source exporters](#how-this-differs-from-closed-source-exporters)
+- [Limitations](#limitations)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
+
+## Why
+
+Copying a Jira issue into a doc, a PR description, an LLM prompt, or a wiki means
+losing the formatting or hand-cleaning a wall of HTML. Existing "export to
+Markdown" extensions are closed source, sometimes bundle analytics, and
+occasionally ask you to paste an API token.
+
+**Jira Markdown Exporter** does the same job in the open: a small, auditable
+Manifest V3 extension that converts an issue's **Atlassian Document Format (ADF)**
+into faithful Markdown, entirely in your browser.
+
+## Features
+
+- **One-click export** — from the toolbar popup, or a **Copy Markdown** button
+  injected right into the issue's action bar.
+- **Faithful ADF → Markdown** — headings, all inline marks, nested lists, code
+  blocks, tables, panels, task/decision lists, mentions, emoji, dates, status
+  lozenges, inline cards, and inline media.
+- **Full issue, not just the description** — title, type, status, assignee,
+  labels, custom fields, comments, and attachments.
+- **No API token** — authenticates with your existing Jira session cookies.
+- **Copy or download** — copy to clipboard, save `{ISSUE}.md`, or save the
+  Markdown plus every attachment into a self-contained `{ISSUE}/` folder.
+- **Remembers your choices** — the comments / custom fields / attachments
+  toggles persist between sessions.
+- **Works in the board detail panel** — detects the issue from `?selectedIssue=`,
+  not just full-page `/browse/` views.
+- **Graceful fallback** — scrapes the rendered DOM when the REST API is
+  unavailable (restricted or on-prem instances).
+- **100% local** — nothing is ever sent to a third-party server.
+
+> 💡 Want to see the UI before installing? Open
+> [`docs/popup-preview.html`](docs/popup-preview.html) in any browser.
 
 ## Install (unpacked)
 
-1. Clone or download this repository.
-2. (Optional) regenerate icons: `npm run icons` (only needed if you edit them).
-3. Open `chrome://extensions` in Chrome/Edge/Brave.
-4. Toggle **Developer mode** (top-right).
-5. Click **Load unpacked** and select the project folder (the one containing
+The extension ships as plain files — no build step.
+
+1. **Download** or clone this repository.
+2. Open **`chrome://extensions`** in Chrome, Edge, or Brave.
+3. Enable **Developer mode** (top-right).
+4. Click **Load unpacked** and select the project folder (the one containing
    `manifest.json`).
-6. Open any Jira Cloud issue (e.g. `https://acme.atlassian.net/browse/ABC-1`)
-   and click the extension icon — or use the injected **⧉ Copy Markdown** button
-   next to the issue title.
+5. Open any Jira Cloud issue and click the extension icon.
 
-No build step is required; the extension ships as plain files.
+> Regenerating icons is optional (`npm run icons`) and only needed if you edit
+> them.
 
----
+## Usage
 
-## Permissions & why each is needed
+1. Open a Jira Cloud issue — a full page (`…/browse/ABC-123`) or the board/backlog
+   **detail panel** (`…?selectedIssue=ABC-123`).
+2. Click the extension icon. The popup shows the issue key, type, status, and
+   comment/attachment counts.
+3. Toggle what to include: **Comments**, **Custom fields**, **Attachments**.
+4. Choose an action:
+   - **Copy** — Markdown goes straight to your clipboard.
+   - **Download** — saves `{ISSUE}.md`; with **Attachments** on, you get an
+     `{ISSUE}/` folder containing `{ISSUE}.md` and every attachment.
 
-| Permission | Why |
+You can also click the **Copy Markdown** button injected next to the issue's
+"Add" action, without opening the popup.
+
+## How it works
+
+```
+┌─────────┐   export    ┌──────────────────────────────┐   GET /rest/api/3/issue
+│  Popup  │ ──────────▶ │  Content script              │ ─────────────────────────▶ Jira
+│ (UI)    │ ◀────────── │  (same-origin, uses cookies) │ ◀─── ADF JSON ─────────────
+└────┬────┘   markdown  └──────────────────────────────┘
+     │ download
+     ▼
+┌──────────────────┐   chrome.downloads (.md + attachments)
+│ Background worker │ ─────────────────────────────────────▶ Downloads/{ISSUE}/
+└──────────────────┘
+```
+
+1. A **content script** on `*.atlassian.net` detects the current issue key from
+   the URL (or the open detail panel).
+2. Because it runs **same-origin** with the Jira tab, it calls
+   `GET /rest/api/3/issue/{key}?expand=names,renderedFields` with
+   `credentials: "include"` — your session cookies authenticate the request. No
+   token, no OAuth.
+3. The returned **ADF** is converted by
+   [`src/adfToMarkdown.js`](src/adfToMarkdown.js) and assembled into a full
+   document by [`src/jiraToMarkdown.js`](src/jiraToMarkdown.js).
+4. Attachments are downloaded natively by the **background worker** via
+   `chrome.downloads` (cookies + redirects, no CORS) — Jira's attachment URLs
+   redirect to a media CDN that blocks cross-origin `fetch`, so they can't be
+   read in-page, but a native download works.
+
+All cookie-authenticated network access happens **only** in the content script,
+which keeps the extension's permission surface small.
+
+### The converter is reusable on its own
+
+[`src/adfToMarkdown.js`](src/adfToMarkdown.js) is written UMD-style, so it runs in
+the browser **and** as a Node module with zero dependencies:
+
+```js
+const { adfToMarkdown } = require('./src/adfToMarkdown.js');
+
+console.log(adfToMarkdown(adfDocument, { baseUrl: 'https://acme.atlassian.net' }));
+```
+
+## Privacy & security
+
+- **No third-party servers.** Issue data never leaves your browser.
+- **No telemetry, no analytics, no remote code.**
+- **No stored credentials.** Auth is your existing session cookie, used only for
+  same-origin requests to your Jira instance.
+- **Auditable.** Plain, unminified vanilla JS — read every line.
+
+## Permissions
+
+| Permission | Why it's needed |
 | --- | --- |
 | `host_permissions: https://*.atlassian.net/*` | Run the content script on Jira Cloud and read issue data from its API. |
-| `activeTab` | Let the popup talk to the issue tab you explicitly opened it on. |
+| `activeTab` | Let the popup talk to the Jira tab you opened it on. |
 | `scripting` | Inject the content script on demand if the tab was open before the extension loaded (so you don't have to reload the tab). |
-| `downloads` | Save the generated `.md` file and download attachments. |
-| `clipboardWrite` | "Copy to Clipboard" action. |
-| `storage` | Remember your export toggles (comments / custom fields / attachments) between sessions. |
-| `optional_host_permissions: https://*/*` | Requested **only** if you enable Data Center support for a self-hosted domain (see below). Not granted by default. |
+| `downloads` | Save the `.md` file and download attachments. |
+| `clipboardWrite` | The **Copy to Clipboard** action. |
+| `storage` | Remember your export toggles between sessions. |
+| `optional_host_permissions: https://*/*` | Requested **only** if you enable Data Center support for a self-hosted domain. Not granted by default. |
 
-There is no `storage`, no analytics, no remote code. Read the source — it's
-short.
+## Jira Data Center / Server
 
----
+The extension targets **Jira Cloud** first. Self-hosted instances differ:
 
-## Data Center / Server (self-hosted Jira)
+- **API path & format.** Cloud uses `/rest/api/3/` (ADF). Data Center / Server use
+  `/rest/api/2/`, which returns **wiki markup** rather than ADF. The content
+  script tries `/3/` then falls back to `/2/`; where a v2 response isn't ADF, the
+  **DOM-scraping fallback** ([`src/domScraper.js`](src/domScraper.js)) fills the
+  gap.
+- **Host permission.** Your DC instance isn't on `atlassian.net`. To use it, add
+  your domain to `content_scripts[].matches` and `host_permissions` in
+  `manifest.json` (e.g. `https://jira.mycompany.com/*`) and reload the extension.
 
-The extension targets **Jira Cloud** first. Self-hosted Jira differs:
+## Development
 
-- **API path:** Cloud uses `/rest/api/3/` (which returns ADF). Data Center /
-  Server use **`/rest/api/2/`**, which returns **wiki markup** (not ADF) in
-  rich-text fields. The content script already tries `/3/` then falls back to
-  `/2/`; when a v2 response contains wiki markup rather than ADF, the ADF
-  converter passes plain strings through unchanged and the **DOM-scraping
-  fallback** ([`src/domScraper.js`](src/domScraper.js)) fills the gap.
-- **Host permission:** your DC instance is not on `atlassian.net`. To use it,
-  add your domain to `manifest.json` `content_scripts[].matches` and
-  `host_permissions` (e.g. `https://jira.mycompany.com/*`), then reload the
-  extension. The `optional_host_permissions` entry is there so a future UI can
-  request this at runtime instead.
+No dependencies, no bundler. Requires Node ≥ 18 for the tests.
 
----
+```bash
+npm test        # run unit tests (node:test) — no deps
+npm run icons   # regenerate the PNG icons
+```
+
+Tests live in [`test/`](test/) and cover the ADF converter and the full-issue
+assembler. Both modules are dependency-free UMD, so they run directly under
+`node --test` with no DOM or bundler.
 
 ## Project structure
 
 ```
 jira-markdown-exporter/
-├── manifest.json              # MV3 manifest
+├── manifest.json                # MV3 manifest
 ├── src/
-│   ├── background.js          # service worker: owns downloads
-│   ├── content.js             # issue detection, cookie-auth API fetch, in-page button
-│   ├── adfToMarkdown.js       # ⭐ standalone ADF → Markdown converter (UMD, unit-tested)
-│   ├── jiraToMarkdown.js      # assembles a full issue into one Markdown doc
-│   ├── domScraper.js          # DOM-scraping fallback for restricted instances
-│   ├── popup.html/.css/.js    # popup UI + export options
-├── icons/                     # generated PNG icons (16/48/128)
-├── docs/popup-preview.html    # standalone design preview of the popup (open in a browser)
-├── tools/generate-icons.js    # regenerates icons with zero deps
-├── test/                      # node:test unit tests (no deps)
+│   ├── background.js            # service worker: owns downloads
+│   ├── content.js               # issue detection, cookie-auth API fetch, in-page button
+│   ├── adfToMarkdown.js         # ⭐ standalone ADF → Markdown converter (UMD, unit-tested)
+│   ├── jiraToMarkdown.js        # assembles a full issue into one Markdown document
+│   ├── domScraper.js            # DOM-scraping fallback for restricted instances
+│   └── popup.html / .css / .js  # popup UI, export options, downloads
+├── icons/                       # generated PNG icons (16 / 48 / 128)
+├── docs/popup-preview.html      # standalone design preview of the popup
+├── tools/generate-icons.js      # regenerates icons with zero dependencies
+├── test/                        # node:test unit tests (no deps)
 ├── package.json
-├── LICENSE                    # MIT
+├── LICENSE                      # MIT
 └── README.md
 ```
 
-### The converter is reusable on its own
+## How this differs from closed-source exporters
 
-[`src/adfToMarkdown.js`](src/adfToMarkdown.js) is written UMD-style — it runs in
-the browser (as a content-script global `adfToMarkdown`) **and** as a Node
-module — so you can reuse it outside the extension:
-
-```js
-const { adfToMarkdown } = require('./src/adfToMarkdown.js');
-console.log(adfToMarkdown(someAdfDocument, { baseUrl: 'https://acme.atlassian.net' }));
-```
-
-It handles paragraphs, headings, all inline marks (bold/italic/strike/underline/
-sub-sup/code/links), bullet & ordered lists (nested), code blocks, blockquotes,
-rules, hard breaks, mentions, emoji, dates, status lozenges, inline/embed cards,
-tables, task lists, decision lists, panels, expands, and inline media (via a
-pluggable `mediaResolver`).
-
----
-
-## Development
-
-```bash
-npm test          # run the unit tests (node:test, Node 18+, no deps)
-npm run icons     # regenerate PNG icons
-```
-
-Tests live in [`test/`](test/) and cover the ADF converter and the full-issue
-assembler. Because both modules are dependency-free UMD, they run directly under
-`node --test` with no bundler or DOM.
-
----
-
-## How this differs from closed-source alternatives
-
-| | This extension | Typical closed-source exporter |
+| | Jira Markdown Exporter | Typical closed-source exporter |
 | --- | --- | --- |
 | License | **MIT, source-available** | Proprietary |
 | Telemetry | **None** | Often bundled analytics |
 | Data flow | **Local only** | May proxy through vendor servers |
-| Auth | **Existing session cookies** | Sometimes requires pasting an API token |
+| Auth | **Existing session cookies** | Sometimes requires an API token |
 | Auditability | **Plain, unminified JS** | Minified / obfuscated |
 | ADF conversion | **Open, unit-tested module** | Black box |
 
----
-
 ## Limitations
 
-- Inline-image resolution depends on Jira exposing the attachment `content` URL;
-  images embedded from external sources are linked, not downloaded.
+- Inline-image links in the Markdown point to Jira URLs (online); the downloaded
+  local copies aren't yet referenced from the `.md`.
 - The DOM-scraping fallback is best-effort and depends on Jira's current markup.
-- Wiki-markup rich text from very old Data Center instances is passed through
-  rather than fully re-parsed (use the DOM fallback there).
+- Very old Data Center wiki markup is passed through rather than fully re-parsed
+  (use the DOM fallback there).
 
 ## Contributing
 
-Issues and PRs welcome. Keep the "no build step / no runtime deps" constraint:
-prefer vanilla JS, and if a bundler becomes necessary, Vite is the intended
-choice.
+Issues and pull requests are welcome. Please keep the **no build step / no runtime
+dependencies** constraint — prefer vanilla JS. If a bundler ever becomes
+necessary, [Vite](https://vitejs.dev/) is the intended choice. Run `npm test`
+before opening a PR.
 
 ## License
 
-[MIT](LICENSE) © 2026 Adnan al Jawabra
+[MIT](LICENSE) © 2026 Topicus.Education BV. Built by Adnan al Jawabra.
