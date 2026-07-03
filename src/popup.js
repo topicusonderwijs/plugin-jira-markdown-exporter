@@ -71,9 +71,24 @@
     actionsEl.classList.remove('hidden');
   }
 
+  // Small inline check icon (no emoji) shown before success messages.
+  const CHECK_SVG =
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
   function setMessage(text, kind) {
-    msgEl.textContent = text || '';
     msgEl.className = 'msg' + (kind ? ' ' + kind : '');
+    msgEl.textContent = '';
+    if (!text) return;
+    if (kind === 'ok') {
+      const ic = document.createElement('span');
+      ic.className = 'msg-ic';
+      ic.innerHTML = CHECK_SVG;
+      msgEl.appendChild(ic);
+    }
+    const t = document.createElement('span');
+    t.className = 'msg-text';
+    t.textContent = text;
+    msgEl.appendChild(t);
   }
 
   // ---- messaging ------------------------------------------------------------
@@ -225,7 +240,7 @@
   async function onCopy() {
     try {
       await navigator.clipboard.writeText(state.markdown);
-      setMessage(`Copied ${state.key} to clipboard ✓`, 'ok');
+      setMessage(`Copied ${state.key} to clipboard`, 'ok');
     } catch (err) {
       setMessage('Clipboard blocked by the browser.', 'error');
     }
@@ -243,7 +258,7 @@
       await downloadBlob(mdBlob, mdName);
 
       if (!includeAttachments) {
-        setMessage(`Downloaded ${state.key}.md ✓`, 'ok');
+        setMessage(`Downloaded ${state.key}.md`, 'ok');
         return;
       }
 
@@ -267,7 +282,7 @@
         }
       }
       setMessage(
-        `Downloaded ${state.key}.md + ${ok} attachment(s)${failed ? ` (${failed} failed)` : ''} ✓`,
+        `Downloaded ${state.key}.md + ${ok} attachment(s)${failed ? ` (${failed} failed)` : ''}`,
         failed ? 'error' : 'ok'
       );
     } catch (err) {
