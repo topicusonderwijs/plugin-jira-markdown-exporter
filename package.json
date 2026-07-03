@@ -18,9 +18,7 @@
     "export"
   ],
   "scripts": {
-    "test": "node --test",
-    "icons": "node tools/generate-icons.js",
-    "zip": "cd \"$(dirname \"$0\")\" 2>/dev/null; zip -r -FS dist/jira-markdown-exporter.zip manifest.json src icons -x '*.DS_Store' && echo 'Packaged dist/jira-markdown-exporter.zip'"
+    "test": "node --test"
   },
   "devDependencies": {},
   "engines": {
