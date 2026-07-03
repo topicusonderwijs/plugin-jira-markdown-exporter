@@ -67,6 +67,34 @@
     return tab;
   }
 
+  // The content script files, in load order (later files depend on earlier).
+  const CONTENT_FILES = [
+    'src/adfToMarkdown.js',
+    'src/jiraToMarkdown.js',
+    'src/domScraper.js',
+    'src/content.js',
+  ];
+
+  // Ask the content script for context. If it isn't there — which happens when
+  // the tab was open *before* the extension was (re)loaded, so Chrome never
+  // injected the declared content script — inject it on demand and retry once.
+  // This removes the "reload the tab" gotcha entirely.
+  async function getContextWithInjection(tabId) {
+    try {
+      const resp = await sendToTab(tabId, { action: 'getContext' });
+      return resp && resp.context;
+    } catch (err) {
+      const missing = /Receiving end does not exist|Could not establish connection/i.test(
+        err.message || ''
+      );
+      if (!missing) throw err;
+      // Programmatically inject (needs "scripting" + host/activeTab access).
+      await chrome.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
+      const resp = await sendToTab(tabId, { action: 'getContext' });
+      return resp && resp.context;
+    }
+  }
+
   function currentOptions() {
     return {
       includeComments: el('opt-comments').checked,
@@ -217,11 +245,12 @@
 
     let ctx;
     try {
-      const resp = await sendToTab(tab.id, { action: 'getContext' });
-      ctx = resp && resp.context;
+      ctx = await getContextWithInjection(tab.id);
     } catch (err) {
+      // Injection is only allowed on pages we have host access to (Jira). A
+      // failure here means this simply isn't a supported Jira tab.
       setStatus(
-        'This tab isn’t a Jira page (or needs a reload). Open a Jira issue and try again.',
+        'This tab isn’t a Jira page. Open a Jira issue (…/browse/ABC-123) and try again.',
         true
       );
       return;
