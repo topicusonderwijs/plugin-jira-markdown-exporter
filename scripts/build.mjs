@@ -1,11 +1,14 @@
 /*
  * build.mjs — produce per-browser packages in dist/.
  *
- * The repo's manifest.json declares both `background.service_worker` (Chrome)
- * and `background.scripts` (Firefox) so the folder can be loaded unpacked in
- * either browser. Each browser ignores the other's key, but only after logging
- * a manifest warning — so for store uploads we strip the key that doesn't
- * apply, and drop `browser_specific_settings` from the Chrome build.
+ * The repo's manifest.json is the Chrome form: it declares only
+ * `background.service_worker`, so the folder loads unpacked in Chrome without
+ * manifest warnings. Firefox has no service worker support at all
+ * (https://bugzil.la/1573659) and needs an event page, so the Firefox target
+ * swaps in `background.scripts`. The Chrome target drops the Firefox-only
+ * `browser_specific_settings`, which Chrome tolerates but the store rejects.
+ *
+ * Consequence: Firefox must be tested from dist/firefox/, not the repo root.
  *
  * Usage: node scripts/build.mjs [chrome|firefox]   (default: both)
  * No dependencies. Zips are produced with the system `zip` when available.
@@ -21,12 +24,11 @@ const ASSETS = ['src', 'icons', 'LICENSE', 'PRIVACY.md'];
 
 const TARGETS = {
   chrome(manifest) {
-    delete manifest.background.scripts;
     delete manifest.browser_specific_settings;
     return manifest;
   },
   firefox(manifest) {
-    delete manifest.background.service_worker;
+    manifest.background = { scripts: [manifest.background.service_worker] };
     return manifest;
   },
 };

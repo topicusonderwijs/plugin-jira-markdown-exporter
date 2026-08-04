@@ -10,7 +10,7 @@ Open source, no telemetry, no API tokens. It uses your existing Jira browser ses
 [![Manifest V3](https://img.shields.io/badge/Chrome%20%2B%20Firefox-Manifest%20V3-0052CC.svg)](manifest.json)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-006644.svg)](#privacy--security)
 [![Tests](https://img.shields.io/badge/tests-node%3Atest-006644.svg)](test/)
-[![No build step](https://img.shields.io/badge/build-none-42526E.svg)](#development)
+[![No bundler](https://img.shields.io/badge/bundler-none-42526E.svg)](#development)
 
 </div>
 
@@ -72,8 +72,10 @@ into faithful Markdown, entirely in your browser.
 
 ## Install (unpacked)
 
-The extension ships as plain files — no build step. The same folder loads in
-both browser families; see [Browser support](#browser-support).
+The extension ships as plain files — no bundler, no dependencies. Chrome loads
+the repo folder directly; Firefox needs one dependency-free manifest rewrite
+first (`npm run build:firefox`), because it has no service worker support. See
+[Browser support](#browser-support).
 
 **Chrome, Edge, Brave**
 
@@ -87,15 +89,15 @@ both browser families; see [Browser support](#browser-support).
 **Firefox** (140+, as set by `strict_min_version`)
 
 1. **Download** or clone this repository.
-2. Open **`about:debugging#/runtime/this-firefox`**.
-3. Click **Load Temporary Add-on…** and pick the `manifest.json` in the project
-   folder.
-4. Open any Jira Cloud issue and click the extension icon.
+2. Run **`npm run build:firefox`** — Firefox needs an event page instead of a
+   service worker, so it loads from `dist/firefox/`, not the project root.
+3. Open **`about:debugging#/runtime/this-firefox`**.
+4. Click **Load Temporary Add-on…** and pick `dist/firefox/manifest.json`.
+5. Open any Jira Cloud issue and click the extension icon.
 
 > Temporary add-ons are removed when Firefox restarts. For a permanent install,
-> run `npm run build:firefox` and submit / self-distribute the resulting
-> `dist/firefox-*.zip` — unsigned add-ons cannot be installed permanently in
-> release Firefox.
+> submit / self-distribute `dist/firefox-*.zip` — unsigned add-ons cannot be
+> installed permanently in release Firefox.
 
 ## Browser support
 
@@ -106,9 +108,12 @@ both browser families; see [Browser support](#browser-support).
 | Extension API | `chrome.*` (promises) | `browser.*` (promises) |
 | Host permissions | granted at install | granted at install (Firefox 127+) |
 
-The repository's `manifest.json` declares **both** background forms, so the
-unpacked folder works in either browser; each ignores the key it doesn't
-support. Every script resolves its API namespace once
+Firefox does not support extension service workers
+([bug 1573659](https://bugzil.la/1573659)), and Chrome rejects the event-page
+key (`'background.scripts' requires manifest version of 2 or lower`) — so no
+single `manifest.json` loads warning-free in both. The repo's manifest is the
+Chrome form; `npm run build:firefox` swaps in `background.scripts` and writes
+the Firefox package to `dist/firefox/`. Every script resolves its API namespace once
 (`globalThis.browser ?? globalThis.chrome`) and uses promises throughout —
 Firefox's `chrome.*` alias is callback-only, so `browser.*` is what makes
 `await` work there.
@@ -229,9 +234,10 @@ npm run build:firefox # one target only
 ```
 
 `scripts/build.mjs` copies the extension files and rewrites `manifest.json` per
-target: Chrome keeps `background.service_worker` (and loses
-`browser_specific_settings`), Firefox keeps `background.scripts`. This is only
-needed for store uploads — the repo folder itself loads unpacked in both.
+target: Chrome keeps `background.service_worker` and loses
+`browser_specific_settings`; Firefox trades the service worker for an event page
+(`background.scripts`). Chrome can also be loaded straight from the repo root —
+Firefox always needs the build.
 
 Tests live in [`test/`](test/) and cover the ADF converter and the full-issue
 assembler. Both modules are dependency-free UMD, so they run directly under
@@ -241,7 +247,7 @@ assembler. Both modules are dependency-free UMD, so they run directly under
 
 ```
 jira-markdown-exporter/
-├── manifest.json                # MV3 manifest (Chrome + Firefox background keys)
+├── manifest.json                # MV3 manifest (Chrome form; build rewrites for Firefox)
 ├── scripts/build.mjs            # per-browser packages in dist/ (no deps)
 ├── src/
 │   ├── background.js            # SW (Chrome) / event page (Firefox): owns downloads
@@ -280,7 +286,7 @@ jira-markdown-exporter/
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep the **no build step / no runtime
+Issues and pull requests are welcome. Please keep the **no bundler / no runtime
 dependencies** constraint — prefer vanilla JS. If a bundler ever becomes
 necessary, [Vite](https://vitejs.dev/) is the intended choice. Run `npm test`
 before opening a PR.

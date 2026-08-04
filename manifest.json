@@ -8,8 +8,7 @@
   "host_permissions": ["https://*.atlassian.net/*"],
   "optional_host_permissions": ["https://*/*"],
   "background": {
-    "service_worker": "src/background.js",
-    "scripts": ["src/background.js"]
+    "service_worker": "src/background.js"
   },
   "browser_specific_settings": {
     "gecko": {
