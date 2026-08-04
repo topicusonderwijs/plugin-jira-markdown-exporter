@@ -84,7 +84,7 @@ both browser families; see [Browser support](#browser-support).
    `manifest.json`).
 5. Open any Jira Cloud issue and click the extension icon.
 
-**Firefox** (128+, as set by `strict_min_version`)
+**Firefox** (140+, as set by `strict_min_version`)
 
 1. **Download** or clone this repository.
 2. Open **`about:debugging#/runtime/this-firefox`**.
@@ -199,8 +199,11 @@ console.log(adfToMarkdown(adfDocument, { baseUrl: 'https://acme.atlassian.net' }
 | `optional_host_permissions: https://*/*` | Requested **only** if you enable Data Center support for a self-hosted domain. Not granted by default. |
 
 In Firefox 127 and later, host permissions are shown in the install prompt and
-granted on installation, as in Chrome. On earlier versions they had to be
-enabled by hand — which is why `strict_min_version` is `128.0`.
+granted on installation, as in Chrome; on earlier versions they had to be
+enabled by hand. The extension also declares that it collects no data
+(`data_collection_permissions: { "required": ["none"] }`), which Firefox
+understands from version 140 — hence `strict_min_version: "140.0"`, in line
+with the current ESR.
 
 ## Jira Data Center / Server
 
