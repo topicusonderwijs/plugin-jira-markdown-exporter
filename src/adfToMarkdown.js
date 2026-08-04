@@ -19,6 +19,13 @@
  *         Resolve a media/mediaInline node (attrs.id / attrs.collection / attrs.alt)
  *         to a concrete href. Used to turn inline images into ![alt](url).
  *   - baseUrl               -> string, prepended to root-relative links.
+ *   - includeStrikethrough  -> boolean (default true). When false, struck-through
+ *         text is removed *content and all* rather than rendered as ~~text~~.
+ *         Teams use strikethrough to mean "we decided against this"; a reader
+ *         that ignores the markers (notably an LLM) would otherwise invert the
+ *         intent. Because we drop it here — while the marks are still on the
+ *         node — no pattern-matching over finished Markdown is needed, so a
+ *         literal "~~" in prose or inside a code block is never touched.
  */
 (function (root, factory) {
   const api = factory();
@@ -41,11 +48,29 @@
     return String(text).replace(/([\\`*_\[\]])/g, '\\$1');
   }
 
+  // True when this node carries a strike mark and the caller asked for struck
+  // text to be dropped. Marks live on the node, so callers can test a node
+  // before rendering it — see renderInline, which needs to know it skipped
+  // something in order to close the whitespace gap left behind.
+  function isStrippedStrike(node, options) {
+    return !!(
+      options &&
+      options.includeStrikethrough === false &&
+      node &&
+      node.marks &&
+      node.marks.some((m) => m.type === 'strike')
+    );
+  }
+
   // Wrap a string of already-rendered inline text with the given ADF marks.
   // Marks are applied inner-to-outer; `code` short-circuits because Markdown
   // code spans cannot contain other formatting.
   function applyMarks(text, marks, options) {
     if (!marks || !marks.length) return text;
+
+    // Dropping struck text has to come before the code short-circuit below, or
+    // a struck inline code span would survive the strip.
+    if (isStrippedStrike({ marks }, options)) return '';
 
     // If there is a code mark, it dominates: render as an inline code span and
     // drop everything else (you cannot bold inside a code span in Markdown).
@@ -104,10 +129,28 @@
   function renderInline(nodes, options) {
     if (!nodes) return '';
     let out = '';
+    // Removing a struck node from the middle of a run leaves a hole with a
+    // space on each side ("did a " + "" + " c"). We swallow the space that
+    // follows the hole, and trim the ends of the run, so the strip does not
+    // show up as stray double spaces. Both are scoped to runs that actually
+    // lost a node — untouched runs keep byte-for-byte the same output.
+    let dropped = false;
+    let closeGap = false;
     for (const node of nodes) {
-      out += renderInlineNode(node, options);
+      if (isStrippedStrike(node, options)) {
+        dropped = true;
+        closeGap = /[ \t]$/.test(out);
+        continue;
+      }
+      let rendered = renderInlineNode(node, options);
+      if (closeGap && rendered) {
+        rendered = rendered.replace(/^[ \t]+/, '');
+        closeGap = false;
+      }
+      out += rendered;
     }
-    return out;
+    // Anchored at the string ends, so a trailing hardBreak ("  \n") is safe.
+    return dropped ? out.replace(/^[ \t]+|[ \t]+$/g, '') : out;
   }
 
   function renderInlineNode(node, options) {
@@ -207,11 +250,16 @@
 
       case 'heading': {
         const level = Math.min(6, Math.max(1, (node.attrs && node.attrs.level) || 1));
-        return `${'#'.repeat(level)} ${renderInline(node.content, options)}`;
+        const text = renderInline(node.content, options);
+        // An empty heading is just a bare "###" — drop it. (Happens when the
+        // whole heading was struck through and strikethrough is stripped.)
+        return text ? `${'#'.repeat(level)} ${text}` : '';
       }
 
-      case 'blockquote':
-        return prefixLines(renderBlocks(node.content, options), '> ');
+      case 'blockquote': {
+        const quoted = renderBlocks(node.content, options);
+        return quoted ? prefixLines(quoted, '> ') : '';
+      }
 
       case 'bulletList':
         return renderList(node, options, false, 0);
@@ -233,7 +281,8 @@
         const type = (node.attrs && node.attrs.panelType) || 'info';
         const emoji = PANEL_EMOJI[type] || 'ℹ️';
         const body = renderBlocks(node.content, options);
-        return prefixLines(`${emoji} ${body}`, '> ');
+        // A panel with nothing left in it is just a floating emoji.
+        return body ? prefixLines(`${emoji} ${body}`, '> ') : '';
       }
 
       case 'table':
@@ -254,7 +303,9 @@
 
       case 'decisionList':
         return (node.content || [])
-          .map((item) => `- 🔵 ${renderInline(item.content, options)}`)
+          .map((item) => renderInline(item.content, options))
+          .filter(Boolean)
+          .map((text) => `- 🔵 ${text}`)
           .join('\n');
 
       case 'expand':
@@ -272,8 +323,10 @@
 
   function renderTaskItem(item, options) {
     if (!item || item.type !== 'taskItem') return '';
+    const text = renderInline(item.content, options);
+    if (!text) return ''; // nothing left to check off
     const done = item.attrs && item.attrs.state === 'DONE';
-    return `- [${done ? 'x' : ' '}] ${renderInline(item.content, options)}`;
+    return `- [${done ? 'x' : ' '}] ${text}`;
   }
 
   // Lists can nest arbitrarily; `depth` controls indentation (2 spaces / level).
@@ -284,8 +337,12 @@
     let index = (node.attrs && node.attrs.order) || 1;
     for (const item of items) {
       if (!item || item.type !== 'listItem') continue;
-      const marker = ordered ? `${index}.` : '-';
       const { lead, rest } = renderListItem(item, options, depth);
+      // An item with no text and no nested blocks would render as a bare "-".
+      // Skip it and don't burn a number on it. (A struck-through bullet ends up
+      // here once strikethrough is stripped.)
+      if (!lead && !rest) continue;
+      const marker = ordered ? `${index}.` : '-';
       lines.push(`${indent}${marker} ${lead}`);
       if (rest) lines.push(rest);
       index += 1;

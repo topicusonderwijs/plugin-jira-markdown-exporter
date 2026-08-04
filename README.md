@@ -58,8 +58,12 @@ into faithful Markdown, entirely in your browser.
 - **No API token** — authenticates with your existing Jira session cookies.
 - **Copy or download** — copy to clipboard, save `{ISSUE}.md`, or save the
   Markdown plus every attachment into a self-contained `{ISSUE}/` folder.
-- **Remembers your choices** — the comments / custom fields / attachments
-  toggles persist between sessions.
+- **Strip strikethrough** — optionally remove struck-through text *and its
+  content*, so "we decided against this" can't be misread as current intent by
+  an LLM that ignores the `~~` markers.
+- **Remembers your choices** — the comments / custom fields / strikethrough /
+  attachments toggles persist between sessions, and the in-page **Copy
+  Markdown** button honours them too.
 - **Works in the board detail panel** — detects the issue from `?selectedIssue=`,
   not just full-page `/browse/` views.
 - **Graceful fallback** — scrapes the rendered DOM when the REST API is
@@ -86,7 +90,8 @@ The extension ships as plain files — no build step.
    **detail panel** (`…?selectedIssue=ABC-123`).
 2. Click the extension icon. The popup shows the issue key, type, status, and
    comment/attachment counts.
-3. Toggle what to include: **Comments**, **Custom fields**, **Attachments**.
+3. Toggle what to include: **Comments**, **Custom fields**, **Strikethrough
+   text**, **Attachments**.
 4. Choose an action:
    - **Copy** — Markdown goes straight to your clipboard.
    - **Download** — saves `{ISSUE}.md`; with **Attachments** on, you get an
@@ -135,6 +140,9 @@ the browser **and** as a Node module with zero dependencies:
 const { adfToMarkdown } = require('./src/adfToMarkdown.js');
 
 console.log(adfToMarkdown(adfDocument, { baseUrl: 'https://acme.atlassian.net' }));
+
+// Drop struck-through text (content included) instead of emitting ~~text~~:
+console.log(adfToMarkdown(adfDocument, { includeStrikethrough: false }));
 ```
 
 ## Privacy & security
@@ -220,7 +228,10 @@ jira-markdown-exporter/
   local copies aren't yet referenced from the `.md`.
 - The DOM-scraping fallback is best-effort and depends on Jira's current markup.
 - Very old Data Center wiki markup is passed through rather than fully re-parsed
-  (use the DOM fallback there).
+  (use the DOM fallback there). Consequently **Strikethrough text** has no effect
+  on wiki-markup fields — `-struck-` there is indistinguishable from ordinary
+  hyphens, so it is left alone rather than guessed at. The API and DOM-fallback
+  paths are both covered.
 
 ## Contributing
 

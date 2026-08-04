@@ -95,3 +95,76 @@ test('output ends with a single trailing newline', () => {
   assert.ok(md.endsWith('\n'));
   assert.ok(!md.endsWith('\n\n'));
 });
+
+// The option has to reach every ADF field the assembler renders — description,
+// comment bodies and custom fields all go through the same converter options.
+const struckIssue = {
+  key: 'EFK-550',
+  names: { customfield_10020: 'Approach' },
+  fields: {
+    summary: 'Pick a strategy',
+    description: {
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Use B. ' },
+            { type: 'text', text: 'Use A.', marks: [{ type: 'strike' }] },
+          ],
+        },
+      ],
+    },
+    customfield_10020: {
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'chosen', marks: [{ type: 'strike' }] },
+            { type: 'text', text: ' final' },
+          ],
+        },
+      ],
+    },
+    comment: {
+      comments: [
+        {
+          author: { displayName: 'Jane Doe' },
+          created: '2026-01-03T09:00:00.000+0000',
+          body: {
+            type: 'doc',
+            version: 1,
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: 'scrapped', marks: [{ type: 'strike' }] },
+                  { type: 'text', text: ' agreed' },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  },
+};
+
+test('includeStrikethrough defaults to true', () => {
+  const md = jiraIssueToMarkdown(struckIssue, {});
+  assert.match(md, /Use B\. ~~Use A\.~~/);
+  assert.match(md, /~~scrapped~~ agreed/);
+});
+
+test('includeStrikethrough:false strips struck text from every ADF field', () => {
+  const md = jiraIssueToMarkdown(struckIssue, { includeStrikethrough: false });
+  assert.doesNotMatch(md, /~~/);
+  assert.doesNotMatch(md, /Use A/);
+  assert.match(md, /Use B\./);
+  assert.match(md, /\| Approach \| final \|/); // custom field
+  assert.doesNotMatch(md, /scrapped/);
+  assert.match(md, /agreed/);
+});

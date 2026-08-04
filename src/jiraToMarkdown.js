@@ -13,6 +13,8 @@
  *                           and to build attachment media resolvers.
  *     - includeComments  -> boolean (default true)
  *     - includeCustomFields -> boolean (default true)
+ *     - includeStrikethrough -> boolean (default true); false removes struck
+ *                           text outright. See adfToMarkdown.js.
  */
 (function (root, factory) {
   const adf =
@@ -150,6 +152,7 @@
     const convOpts = {
       baseUrl,
       mediaResolver: buildMediaResolver(attachments, baseUrl),
+      includeStrikethrough: options.includeStrikethrough !== false,
     };
 
     const out = [];

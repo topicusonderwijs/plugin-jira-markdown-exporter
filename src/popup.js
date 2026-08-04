@@ -136,6 +136,7 @@
     return {
       includeComments: el('opt-comments').checked,
       includeCustomFields: el('opt-customfields').checked,
+      includeStrikethrough: el('opt-strikethrough').checked,
     };
   }
 
@@ -145,6 +146,7 @@
   const DEFAULT_PREFS = {
     includeComments: true,
     includeCustomFields: true,
+    includeStrikethrough: true,
     includeAttachments: false,
   };
 
@@ -166,6 +168,7 @@
     const prefs = {
       includeComments: el('opt-comments').checked,
       includeCustomFields: el('opt-customfields').checked,
+      includeStrikethrough: el('opt-strikethrough').checked,
       includeAttachments: attachmentPref,
     };
     chrome.storage.local.set({ [PREFS_KEY]: prefs });
@@ -174,6 +177,7 @@
   function applyPrefs(prefs) {
     el('opt-comments').checked = !!prefs.includeComments;
     el('opt-customfields').checked = !!prefs.includeCustomFields;
+    el('opt-strikethrough').checked = !!prefs.includeStrikethrough;
     attachmentPref = !!prefs.includeAttachments;
     el('opt-attachments').checked = attachmentPref;
   }
@@ -367,6 +371,10 @@
     runExport();
   });
   el('opt-customfields').addEventListener('change', () => {
+    savePrefs();
+    runExport();
+  });
+  el('opt-strikethrough').addEventListener('change', () => {
     savePrefs();
     runExport();
   });

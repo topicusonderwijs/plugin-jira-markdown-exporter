@@ -28,23 +28,34 @@
 
   // Convert a rendered HTML element subtree to rough Markdown. Handles the
   // common block/inline tags Jira emits in description/comment bodies.
-  function htmlToMarkdown(node) {
+  //
+  // options.includeStrikethrough === false drops <del>/<s>/<strike> subtrees
+  // entirely (text included) — see adfToMarkdown.js for why.
+  function htmlToMarkdown(node, options) {
     if (!node) return '';
     let out = '';
     node.childNodes.forEach((child) => {
-      out += serializeNode(child);
+      out += serializeNode(child, options);
     });
-    return out.replace(/\n{3,}/g, '\n\n').trim();
+    out = out.replace(/\n{3,}/g, '\n\n');
+    // Removing an inline element leaves the spaces that surrounded it back to
+    // back. Collapse those, but not the two trailing spaces of a <br> hard
+    // break — hence the negative lookahead.
+    if (options && options.includeStrikethrough === false) {
+      out = out.replace(/[ \t]{2,}(?!\n)/g, ' ');
+    }
+    return out.trim();
   }
 
-  function serializeNode(node) {
+  function serializeNode(node, options) {
     if (node.nodeType === Node.TEXT_NODE) {
       return node.textContent.replace(/\s+/g, ' ');
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return '';
 
     const tag = node.tagName.toLowerCase();
-    const inner = () => Array.from(node.childNodes).map(serializeNode).join('');
+    const inner = () => Array.from(node.childNodes).map((c) => serializeNode(c, options)).join('');
+    const stripStrike = !!(options && options.includeStrikethrough === false);
 
     switch (tag) {
       case 'h1': return `\n# ${inner()}\n\n`;
@@ -61,7 +72,7 @@
       case 'i': return `*${inner()}*`;
       case 'del':
       case 's':
-      case 'strike': return `~~${inner()}~~`;
+      case 'strike': return stripStrike ? '' : `~~${inner()}~~`;
       case 'code': return `\`${node.textContent}\``;
       case 'pre': return `\n\`\`\`\n${node.textContent}\n\`\`\`\n\n`;
       case 'blockquote': return `\n${node.textContent.split('\n').map((l) => `> ${l}`).join('\n')}\n\n`;
@@ -74,15 +85,30 @@
         const alt = node.getAttribute('alt') || 'image';
         return src ? `![${alt}](${src})` : '';
       }
-      case 'ul':
-        return '\n' + Array.from(node.children).filter((c) => c.tagName === 'LI').map((li) => `- ${serializeNode(li).trim()}`).join('\n') + '\n\n';
-      case 'ol':
-        return '\n' + Array.from(node.children).filter((c) => c.tagName === 'LI').map((li, i) => `${i + 1}. ${serializeNode(li).trim()}`).join('\n') + '\n\n';
+      // Items that serialize to nothing are skipped, so a struck-through bullet
+      // doesn't leave a bare "-" behind (and doesn't consume an <ol> number).
+      case 'ul': {
+        const items = listItems(node, options);
+        return items.length ? '\n' + items.map((text) => `- ${text}`).join('\n') + '\n\n' : '';
+      }
+      case 'ol': {
+        const items = listItems(node, options);
+        return items.length
+          ? '\n' + items.map((text, i) => `${i + 1}. ${text}`).join('\n') + '\n\n'
+          : '';
+      }
       case 'li': return inner();
       case 'hr': return '\n---\n\n';
       case 'table': return `\n${serializeTable(node)}\n\n`;
       default: return inner();
     }
+  }
+
+  function listItems(list, options) {
+    return Array.from(list.children)
+      .filter((c) => c.tagName === 'LI')
+      .map((li) => serializeNode(li, options).trim())
+      .filter(Boolean);
   }
 
   function serializeTable(table) {
@@ -98,7 +124,8 @@
   }
 
   // Scrape the current issue view. Returns { key, markdown } or throws.
-  function scrapeIssue(issueKey) {
+  function scrapeIssue(issueKey, options) {
+    options = options || {};
     const key =
       issueKey ||
       firstText(['[data-testid="issue.views.issue-base.foundation.breadcrumbs.current-issue.item"]']) ||
@@ -144,7 +171,7 @@
 
     if (descEl) {
       out.push('## Description');
-      out.push(htmlToMarkdown(descEl));
+      out.push(htmlToMarkdown(descEl, options));
     }
 
     // Comments (Cloud markup)
@@ -160,7 +187,7 @@
         const bodyEl = el.querySelector(
           '[data-testid$="comment-body"], .action-body, .user-content-block'
         );
-        const body = bodyEl ? htmlToMarkdown(bodyEl) : textOf(el);
+        const body = bodyEl ? htmlToMarkdown(bodyEl, options) : textOf(el);
         out.push(`### ${author || 'Comment'}\n\n${body}`);
       });
     }
