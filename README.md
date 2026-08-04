@@ -7,7 +7,7 @@
 Open source, no telemetry, no API tokens. It uses your existing Jira browser session and does everything locally.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-0052CC.svg)](LICENSE)
-[![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-0052CC.svg)](manifest.json)
+[![Manifest V3](https://img.shields.io/badge/Chrome%20%2B%20Firefox-Manifest%20V3-0052CC.svg)](manifest.json)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-006644.svg)](#privacy--security)
 [![Tests](https://img.shields.io/badge/tests-node%3Atest-006644.svg)](test/)
 [![No build step](https://img.shields.io/badge/build-none-42526E.svg)](#development)
@@ -21,6 +21,7 @@ Open source, no telemetry, no API tokens. It uses your existing Jira browser ses
 - [Why](#why)
 - [Features](#features)
 - [Install](#install-unpacked)
+- [Browser support](#browser-support)
 - [Usage](#usage)
 - [How it works](#how-it-works)
 - [Privacy & security](#privacy--security)
@@ -71,14 +72,49 @@ into faithful Markdown, entirely in your browser.
 
 ## Install (unpacked)
 
-The extension ships as plain files — no build step.
+The extension ships as plain files — no build step. The same folder loads in
+both browser families; see [Browser support](#browser-support).
+
+**Chrome, Edge, Brave**
 
 1. **Download** or clone this repository.
-2. Open **`chrome://extensions`** in Chrome, Edge, or Brave.
+2. Open **`chrome://extensions`**.
 3. Enable **Developer mode** (top-right).
 4. Click **Load unpacked** and select the project folder (the one containing
    `manifest.json`).
 5. Open any Jira Cloud issue and click the extension icon.
+
+**Firefox** (128+, as set by `strict_min_version`)
+
+1. **Download** or clone this repository.
+2. Open **`about:debugging#/runtime/this-firefox`**.
+3. Click **Load Temporary Add-on…** and pick the `manifest.json` in the project
+   folder.
+4. Open any Jira Cloud issue and click the extension icon.
+
+> Temporary add-ons are removed when Firefox restarts. For a permanent install,
+> run `npm run build:firefox` and submit / self-distribute the resulting
+> `dist/firefox-*.zip` — unsigned add-ons cannot be installed permanently in
+> release Firefox.
+
+## Browser support
+
+| | Chrome / Edge / Brave | Firefox |
+| --- | --- | --- |
+| Manifest | V3 | V3 |
+| Background | service worker | event page (`background.scripts`) |
+| Extension API | `chrome.*` (promises) | `browser.*` (promises) |
+| Host permissions | granted at install | granted at install (Firefox 127+) |
+
+The repository's `manifest.json` declares **both** background forms, so the
+unpacked folder works in either browser; each ignores the key it doesn't
+support. Every script resolves its API namespace once
+(`globalThis.browser ?? globalThis.chrome`) and uses promises throughout —
+Firefox's `chrome.*` alias is callback-only, so `browser.*` is what makes
+`await` work there.
+
+For store uploads, `npm run build` writes clean per-browser packages to `dist/`
+with the irrelevant manifest key stripped (see [Development](#development)).
 
 ## Usage
 
@@ -104,9 +140,9 @@ You can also click the **Copy Markdown** button injected next to the issue's
 └────┬────┘   markdown  └──────────────────────────────┘
      │ download
      ▼
-┌──────────────────┐   chrome.downloads (.md + attachments)
-│ Background worker │ ─────────────────────────────────────▶ Downloads/{ISSUE}/
-└──────────────────┘
+┌───────────────────┐   downloads API (.md + attachments)
+│ Background script │ ─────────────────────────────────────▶ Downloads/{ISSUE}/
+└───────────────────┘
 ```
 
 1. A **content script** on `*.atlassian.net` detects the current issue key from
@@ -118,10 +154,15 @@ You can also click the **Copy Markdown** button injected next to the issue's
 3. The returned **ADF** is converted by
    [`src/adfToMarkdown.js`](src/adfToMarkdown.js) and assembled into a full
    document by [`src/jiraToMarkdown.js`](src/jiraToMarkdown.js).
-4. Attachments are downloaded natively by the **background worker** via
-   `chrome.downloads` (cookies + redirects, no CORS) — Jira's attachment URLs
+4. Attachments are downloaded natively by the **background script** via the
+   `downloads` API (cookies + redirects, no CORS) — Jira's attachment URLs
    redirect to a media CDN that blocks cross-origin `fetch`, so they can't be
    read in-page, but a native download works.
+5. The generated `.md` is handed to the background script as **text**, which
+   turns it into the URL form its browser's `downloads` API accepts: a `blob:`
+   URL in Firefox (which rejects `data:` URLs, but whose background context is a
+   real page), a `data:` URL in Chrome (whose service worker has no
+   `URL.createObjectURL`).
 
 All cookie-authenticated network access happens **only** in the content script,
 which keeps the extension's permission surface small.
@@ -157,6 +198,10 @@ console.log(adfToMarkdown(adfDocument, { baseUrl: 'https://acme.atlassian.net' }
 | `storage` | Remember your export toggles between sessions. |
 | `optional_host_permissions: https://*/*` | Requested **only** if you enable Data Center support for a self-hosted domain. Not granted by default. |
 
+In Firefox 127 and later, host permissions are shown in the install prompt and
+granted on installation, as in Chrome. On earlier versions they had to be
+enabled by hand — which is why `strict_min_version` is `128.0`.
+
 ## Jira Data Center / Server
 
 The extension targets **Jira Cloud** first. Self-hosted instances differ:
@@ -175,8 +220,15 @@ The extension targets **Jira Cloud** first. Self-hosted instances differ:
 No dependencies, no bundler. Requires Node ≥ 18 for the tests.
 
 ```bash
-npm test        # run unit tests (node:test) — no deps
+npm test              # run unit tests (node:test) — no deps
+npm run build         # write dist/chrome/ + dist/firefox/ (and .zip if `zip` exists)
+npm run build:firefox # one target only
 ```
+
+`scripts/build.mjs` copies the extension files and rewrites `manifest.json` per
+target: Chrome keeps `background.service_worker` (and loses
+`browser_specific_settings`), Firefox keeps `background.scripts`. This is only
+needed for store uploads — the repo folder itself loads unpacked in both.
 
 Tests live in [`test/`](test/) and cover the ADF converter and the full-issue
 assembler. Both modules are dependency-free UMD, so they run directly under
@@ -186,9 +238,10 @@ assembler. Both modules are dependency-free UMD, so they run directly under
 
 ```
 jira-markdown-exporter/
-├── manifest.json                # MV3 manifest
+├── manifest.json                # MV3 manifest (Chrome + Firefox background keys)
+├── scripts/build.mjs            # per-browser packages in dist/ (no deps)
 ├── src/
-│   ├── background.js            # service worker: owns downloads
+│   ├── background.js            # SW (Chrome) / event page (Firefox): owns downloads
 │   ├── content.js               # issue detection, cookie-auth API fetch, in-page button
 │   ├── adfToMarkdown.js         # ⭐ standalone ADF → Markdown converter (UMD, unit-tested)
 │   ├── jiraToMarkdown.js        # assembles a full issue into one Markdown document
