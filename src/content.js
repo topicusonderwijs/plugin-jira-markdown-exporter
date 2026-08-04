@@ -18,6 +18,9 @@
 (function () {
   'use strict';
 
+  // Firefox exposes the promise-based `browser` namespace; Chrome only `chrome`.
+  const api = globalThis.browser ?? globalThis.chrome;
+
   // Jira Cloud = /rest/api/3/ (ADF). Data Center = /rest/api/2/ (wiki markup).
   // We try v3 first, then v2 as a fallback for on-prem instances.
   const API_VERSIONS = ['3', '2'];
@@ -196,12 +199,12 @@
 
   // ---- messaging with the popup ---------------------------------------------
   //
-  // Note: attachment binaries are downloaded natively by the background worker
-  // via chrome.downloads (cookies + redirects, no CORS). We deliberately do NOT
-  // fetch them here — Jira's attachment URLs redirect to a media CDN that
+  // Note: attachment binaries are downloaded natively by the background script
+  // via the downloads API (cookies + redirects, no CORS). We deliberately do
+  // NOT fetch them here — Jira's attachment URLs redirect to a media CDN that
   // blocks cross-origin fetch, so in-page fetching always fails.
 
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       try {
         if (msg.action === 'getContext') {

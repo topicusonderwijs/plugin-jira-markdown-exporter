@@ -15,6 +15,11 @@
 (function () {
   'use strict';
 
+  // Firefox exposes the promise-based `browser` namespace; its `chrome` alias
+  // is callback-only. Chrome has no `browser`, and its MV3 `chrome` APIs return
+  // promises. Using this alias everywhere keeps one promise-based code path.
+  const api = globalThis.browser ?? globalThis.chrome;
+
   const REPO_URL = 'https://github.com/topicusonderwijs/plugin-jira-markdown-exporter';
 
   const el = (id) => document.getElementById(id);
@@ -41,7 +46,7 @@
 
   el('link-repo').addEventListener('click', (e) => {
     e.preventDefault();
-    chrome.tabs.create({ url: REPO_URL });
+    api.tabs.create({ url: REPO_URL });
   });
 
   // ---- UI state helpers -----------------------------------------------------
@@ -93,17 +98,13 @@
 
   // ---- messaging ------------------------------------------------------------
 
+  // Rejects when no content script is listening (both browsers).
   function sendToTab(tabId, message) {
-    return new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(tabId, message, (response) => {
-        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-        else resolve(response);
-      });
-    });
+    return api.tabs.sendMessage(tabId, message);
   }
 
   async function getActiveTab() {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     return tab;
   }
 
@@ -126,7 +127,7 @@
         err.message || ''
       );
       if (!missing) throw err;
-      await chrome.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
+      await api.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
       const resp = await sendToTab(tabId, { action: 'getContext' });
       return resp && resp.context;
     }
@@ -155,13 +156,13 @@
   // user's actual intent back off the DOM — we keep it here instead.
   let attachmentPref = DEFAULT_PREFS.includeAttachments;
 
-  function loadPrefs() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(PREFS_KEY, (data) => {
-        if (chrome.runtime.lastError) return resolve({ ...DEFAULT_PREFS });
-        resolve({ ...DEFAULT_PREFS, ...((data && data[PREFS_KEY]) || {}) });
-      });
-    });
+  async function loadPrefs() {
+    try {
+      const data = await api.storage.local.get(PREFS_KEY);
+      return { ...DEFAULT_PREFS, ...((data && data[PREFS_KEY]) || {}) };
+    } catch (err) {
+      return { ...DEFAULT_PREFS };
+    }
   }
 
   function savePrefs() {
@@ -171,7 +172,7 @@
       includeStrikethrough: el('opt-strikethrough').checked,
       includeAttachments: attachmentPref,
     };
-    chrome.storage.local.set({ [PREFS_KEY]: prefs });
+    api.storage.local.set({ [PREFS_KEY]: prefs });
   }
 
   function applyPrefs(prefs) {
@@ -298,16 +299,15 @@
       // When bundling attachments, keep everything together inside the {key}/
       // folder (…/{key}.md + …/attachments). Otherwise save {key}.md at the
       // Downloads root.
-      const mdBlob = new Blob([state.markdown], { type: 'text/markdown' });
       const mdName = includeAttachments ? `${state.key}/${state.key}.md` : `${state.key}.md`;
-      await downloadBlob(mdBlob, mdName);
+      await downloadText(state.markdown, mdName);
 
       if (!includeAttachments) {
         setMessage(`Downloaded ${state.key}.md`, 'ok');
         return;
       }
 
-      // Attachments: hand each remote URL to chrome.downloads, which downloads
+      // Attachments: hand each remote URL to the downloads API, which downloads
       // it natively (cookies + redirects, no CORS) into a {key}/ folder. We
       // can't fetch the bytes in-page — Jira's media CDN blocks cross-origin
       // fetch — so a client-side .zip isn't possible; a folder is.
@@ -337,15 +337,11 @@
     }
   }
 
-  // Route a download through the background worker (it survives popup close).
-  function requestDownload(payload) {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ action: 'download', ...payload }, (resp) => {
-        if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-        if (!resp || !resp.ok) return reject(new Error((resp && resp.error) || 'download failed'));
-        resolve(resp);
-      });
-    });
+  // Route a download through the background script (it survives popup close).
+  async function requestDownload(payload) {
+    const resp = await api.runtime.sendMessage({ action: 'download', ...payload });
+    if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'download failed');
+    return resp;
   }
 
   // Download a remote URL (e.g. a Jira attachment) by its href.
@@ -353,14 +349,11 @@
     return requestDownload({ url, filename });
   }
 
-  // Download a Blob (the generated Markdown) via a data: URL.
-  function downloadBlob(blob, filename) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => requestDownload({ dataUrl: reader.result, filename }).then(resolve, reject);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
+  // Download generated text (the Markdown). The background script turns it into
+  // whatever URL form its browser's downloads API accepts — blob: in Firefox,
+  // data: in Chrome — so the popup can close without killing the download.
+  function downloadText(text, filename) {
+    return requestDownload({ text, mime: 'text/markdown', filename });
   }
 
   btnCopy.addEventListener('click', onCopy);
