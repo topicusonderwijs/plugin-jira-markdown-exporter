@@ -153,6 +153,7 @@
         baseUrl,
         includeComments: options.includeComments !== false,
         includeCustomFields: options.includeCustomFields !== false,
+        includeStrikethrough: options.includeStrikethrough !== false,
       });
       const attachments = (json.fields && json.fields.attachment) || [];
       return {
@@ -172,7 +173,9 @@
     } catch (apiError) {
       // Fallback: scrape the rendered DOM (Data Center / restricted access).
       try {
-        const scraped = self.JiraDomScraper.scrapeIssue(key);
+        const scraped = self.JiraDomScraper.scrapeIssue(key, {
+          includeStrikethrough: options.includeStrikethrough !== false,
+        });
         return {
           ok: true,
           source: 'dom-scrape',
@@ -237,11 +240,29 @@
     btn.querySelector('.jme-label').textContent = label;
   }
 
+  // The in-page button has no UI of its own, so it honours the toggles the user
+  // last set in the popup (same storage key popup.js writes). Falling back to
+  // {} keeps every option at its default if storage is unavailable.
+  const PREFS_KEY = 'exportPrefs';
+
+  function loadPrefs() {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(PREFS_KEY, (data) => {
+          if (chrome.runtime.lastError) return resolve({});
+          resolve((data && data[PREFS_KEY]) || {});
+        });
+      } catch (_) {
+        resolve({});
+      }
+    });
+  }
+
   async function copyMarkdownFromButton(btn) {
     setButtonState(btn, ICONS.spinner, 'Exporting…');
     btn.disabled = true;
     try {
-      const result = await exportIssue(null, {});
+      const result = await exportIssue(null, await loadPrefs());
       if (!result.ok) throw new Error(result.error);
       await navigator.clipboard.writeText(result.markdown);
       setButtonState(btn, ICONS.check, 'Copied!');
