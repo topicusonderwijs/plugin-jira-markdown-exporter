@@ -90,7 +90,7 @@ first (`npm run build:firefox`), because it has no service worker support. See
    `manifest.json`).
 5. Open any Jira Cloud issue and click the extension icon.
 
-**Firefox** (140+, as set by `strict_min_version`)
+**Firefox** (142+, as set by `strict_min_version`)
 
 1. **Download** or clone this repository.
 2. Run **`npm run build:firefox`** — Firefox needs an event page instead of a
@@ -215,8 +215,8 @@ In Firefox 127 and later, host permissions are shown in the install prompt and
 granted on installation, as in Chrome; on earlier versions they had to be
 enabled by hand. The extension also declares that it collects no data
 (`data_collection_permissions: { "required": ["none"] }`), which Firefox
-understands from version 140 — hence `strict_min_version: "140.0"`, in line
-with the current ESR.
+understands from version 140 on desktop but only from version 142 on Android —
+hence `strict_min_version: "142.0"`, the lowest floor that is valid on both.
 
 ## Jira Data Center / Server
 

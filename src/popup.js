@@ -76,9 +76,29 @@
     actionsEl.classList.remove('hidden');
   }
 
-  // Small inline check icon (no emoji) shown before success messages.
-  const CHECK_SVG =
-    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  // Small inline check icon (no emoji) shown before success messages. Built as
+  // real DOM nodes rather than a markup string so nothing is assigned to
+  // innerHTML — add-on review flags that, and parsing markup here buys nothing.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  function makeCheckIcon() {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    const attrs = {
+      viewBox: '0 0 24 24',
+      width: '13',
+      height: '13',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2.5',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    };
+    for (const [key, value] of Object.entries(attrs)) svg.setAttribute(key, value);
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', 'M20 6 9 17l-5-5');
+    svg.appendChild(path);
+    return svg;
+  }
 
   function setMessage(text, kind) {
     msgEl.className = 'msg' + (kind ? ' ' + kind : '');
@@ -87,7 +107,7 @@
     if (kind === 'ok') {
       const ic = document.createElement('span');
       ic.className = 'msg-ic';
-      ic.innerHTML = CHECK_SVG;
+      ic.appendChild(makeCheckIcon());
       msgEl.appendChild(ic);
     }
     const t = document.createElement('span');
@@ -197,7 +217,7 @@
     // Type chip (with icon if available)
     const typeChip = el('type-chip');
     if (meta.type && meta.type.name) {
-      typeChip.innerHTML = '';
+      typeChip.replaceChildren();
       if (meta.type.iconUrl) {
         const img = document.createElement('img');
         img.src = meta.type.iconUrl;
