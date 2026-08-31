@@ -227,19 +227,60 @@
 
   // Inline SVG icons (no emoji). All use currentColor so they inherit the
   // button's white text colour. 16px, stroke-based (Lucide-style).
+  //
+  // Each icon is a list of child shapes rather than a markup string: the icons
+  // are built as real DOM nodes (see makeIcon) so we never assign to innerHTML,
+  // which add-on review flags and which parses markup at runtime for no gain.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
   const ICONS = {
-    copy:
-      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
-    spinner:
-      '<svg class="jme-spin" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
-    check:
-      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
-    alert:
-      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>',
+    copy: {
+      shapes: [
+        ['rect', { x: '9', y: '9', width: '13', height: '13', rx: '2', ry: '2' }],
+        ['path', { d: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' }],
+      ],
+    },
+    spinner: {
+      class: 'jme-spin',
+      shapes: [['path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' }]],
+    },
+    check: {
+      'stroke-width': '2.5',
+      shapes: [['path', { d: 'M20 6 9 17l-5-5' }]],
+    },
+    alert: {
+      shapes: [
+        ['circle', { cx: '12', cy: '12', r: '10' }],
+        ['path', { d: 'M12 8v4M12 16h.01' }],
+      ],
+    },
   };
 
-  function setButtonState(btn, icon, label) {
-    btn.querySelector('.jme-ic').innerHTML = icon;
+  function makeIcon(name) {
+    const spec = ICONS[name];
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    const attrs = {
+      viewBox: '0 0 24 24',
+      width: '15',
+      height: '15',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': spec['stroke-width'] || '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    };
+    for (const [key, value] of Object.entries(attrs)) svg.setAttribute(key, value);
+    if (spec.class) svg.setAttribute('class', spec.class);
+    for (const [tag, shapeAttrs] of spec.shapes) {
+      const shape = document.createElementNS(SVG_NS, tag);
+      for (const [key, value] of Object.entries(shapeAttrs)) shape.setAttribute(key, value);
+      svg.appendChild(shape);
+    }
+    return svg;
+  }
+
+  function setButtonState(btn, iconName, label) {
+    btn.querySelector('.jme-ic').replaceChildren(makeIcon(iconName));
     btn.querySelector('.jme-label').textContent = label;
   }
 
@@ -262,19 +303,19 @@
   }
 
   async function copyMarkdownFromButton(btn) {
-    setButtonState(btn, ICONS.spinner, 'Exporting…');
+    setButtonState(btn, 'spinner', 'Exporting…');
     btn.disabled = true;
     try {
       const result = await exportIssue(null, await loadPrefs());
       if (!result.ok) throw new Error(result.error);
       await navigator.clipboard.writeText(result.markdown);
-      setButtonState(btn, ICONS.check, 'Copied!');
+      setButtonState(btn, 'check', 'Copied!');
     } catch (err) {
-      setButtonState(btn, ICONS.alert, 'Failed');
+      setButtonState(btn, 'alert', 'Failed');
       console.error('[Jira Markdown Exporter]', err);
     } finally {
       setTimeout(() => {
-        setButtonState(btn, ICONS.copy, 'Copy Markdown');
+        setButtonState(btn, 'copy', 'Copy Markdown');
         btn.disabled = false;
       }, 2000);
     }
@@ -329,7 +370,13 @@
     btn.className = 'CopyBtnForJira';
     btn.type = 'button';
     btn.title = 'Copy this Jira issue as Markdown';
-    btn.innerHTML = `<span class="jme-ic">${ICONS.copy}</span><span class="jme-label">Copy Markdown</span>`;
+    const iconSlot = document.createElement('span');
+    iconSlot.className = 'jme-ic';
+    iconSlot.appendChild(makeIcon('copy'));
+    const label = document.createElement('span');
+    label.className = 'jme-label';
+    label.textContent = 'Copy Markdown';
+    btn.append(iconSlot, label);
     btn.addEventListener('click', () => copyMarkdownFromButton(btn));
     return btn;
   }
