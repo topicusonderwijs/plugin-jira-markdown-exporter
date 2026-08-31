@@ -290,6 +290,12 @@ body {
   opacity: 0.45;
   cursor: default;
 }
+/* A toggle that only means something while the one above it is on. */
+.toggle.nested {
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+  margin-left: 2px;
+}
 
 /* ---- actions ---- */
 .actions {

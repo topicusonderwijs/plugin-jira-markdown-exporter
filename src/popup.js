@@ -158,6 +158,8 @@
       includeComments: el('opt-comments').checked,
       includeCustomFields: el('opt-customfields').checked,
       includeStrikethrough: el('opt-strikethrough').checked,
+      includeSubtasks: el('opt-subtasks').checked,
+      includeSubtaskDetails: el('opt-subtask-details').checked,
     };
   }
 
@@ -168,6 +170,8 @@
     includeComments: true,
     includeCustomFields: true,
     includeStrikethrough: true,
+    includeSubtasks: true,
+    includeSubtaskDetails: true,
     includeAttachments: false,
   };
 
@@ -190,6 +194,8 @@
       includeComments: el('opt-comments').checked,
       includeCustomFields: el('opt-customfields').checked,
       includeStrikethrough: el('opt-strikethrough').checked,
+      includeSubtasks: el('opt-subtasks').checked,
+      includeSubtaskDetails: el('opt-subtask-details').checked,
       includeAttachments: attachmentPref,
     };
     api.storage.local.set({ [PREFS_KEY]: prefs });
@@ -199,8 +205,26 @@
     el('opt-comments').checked = !!prefs.includeComments;
     el('opt-customfields').checked = !!prefs.includeCustomFields;
     el('opt-strikethrough').checked = !!prefs.includeStrikethrough;
+    el('opt-subtasks').checked = !!prefs.includeSubtasks;
+    el('opt-subtask-details').checked = !!prefs.includeSubtaskDetails;
+    syncSubtaskRows();
     attachmentPref = !!prefs.includeAttachments;
     el('opt-attachments').checked = attachmentPref;
+  }
+
+  // "Subtask details" only means anything while "Subtasks" is on, so grey it
+  // out when the parent toggle is off — but never rewrite the checkbox, its
+  // state is the stored preference.
+  //
+  // Deliberately NOT gated on whether the issue actually has subtasks: an
+  // issue without them renders no Subtasks section either way, so disabling
+  // the toggles would only take away control for no gain — and it would make
+  // them depend on a count from the content script, which goes stale in an
+  // already-open tab after an extension reload.
+  function syncSubtaskRows() {
+    const wanted = el('opt-subtasks').checked;
+    el('opt-subtask-details').disabled = !wanted;
+    el('row-subtask-details').classList.toggle('disabled', !wanted);
   }
 
   // ---- rendering ------------------------------------------------------------
@@ -388,6 +412,15 @@
     runExport();
   });
   el('opt-strikethrough').addEventListener('change', () => {
+    savePrefs();
+    runExport();
+  });
+  el('opt-subtasks').addEventListener('change', () => {
+    syncSubtaskRows();
+    savePrefs();
+    runExport();
+  });
+  el('opt-subtask-details').addEventListener('change', () => {
     savePrefs();
     runExport();
   });

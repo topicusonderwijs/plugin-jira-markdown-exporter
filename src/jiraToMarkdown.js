@@ -13,8 +13,17 @@
  *                           and to build attachment media resolvers.
  *     - includeComments  -> boolean (default true)
  *     - includeCustomFields -> boolean (default true)
+ *     - includeSubtasks  -> boolean (default true); false drops the whole
+ *                           Subtasks section.
  *     - includeStrikethrough -> boolean (default true); false removes struck
  *                           text outright. See adfToMarkdown.js.
+ *
+ * Section order: title, metadata, description, linked issues, other fields,
+ * attachments, comments, then subtasks last — see the Subtasks block below.
+ *
+ * Subtasks render as a flat list when the payload only holds Jira's stubs, and
+ * as a section per subtask when their fields have been enriched with real
+ * bodies (content.js does that via a follow-up request).
  */
 (function (root, factory) {
   const adf =
@@ -35,6 +44,9 @@
 
   function fmtDate(value) {
     if (!value) return '';
+    // Date-only fields (duedate) carry no time; formatting them as a timestamp
+    // would invent one and shift it by the local UTC offset.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value).trim())) return String(value).trim();
     const d = new Date(value);
     if (isNaN(d.getTime())) return String(value);
     // Keep it readable and locale-neutral: YYYY-MM-DD HH:mm
@@ -140,10 +152,114 @@
     'thumbnail',
   ]);
 
+  // Description and comment bodies arrive as ADF on Jira Cloud (v3) and as
+  // wiki-markup strings on Data Center (v2). Pass strings through untouched —
+  // better raw wiki markup than nothing.
+  function renderDoc(value, opts) {
+    if (!value) return '';
+    if (typeof value === 'string') return value.trim();
+    return adfToMarkdown(value, opts);
+  }
+
+  function attachmentLine(a, baseUrl) {
+    const href =
+      a.content ||
+      (baseUrl ? `${baseUrl}/secure/attachment/${a.id}/${encodeURIComponent(a.filename || '')}` : '');
+    const size = a.size ? ` (${formatBytes(a.size)})` : '';
+    return href ? `- [${a.filename}](${href})${size}` : `- ${a.filename}${size}`;
+  }
+
+  // Does this subtask carry more than the stub Jira embeds in the parent?
+  // The parent payload's `subtasks` array only ever holds summary/status/
+  // priority/issuetype — no `expand` widens it. Anything richer got merged in
+  // by a follow-up request (see fetchSubtaskDetails in content.js), and only
+  // then is a section per subtask worth the vertical space.
+  function subtaskHasBody(s) {
+    const f = (s && s.fields) || {};
+    return !!(
+      f.description ||
+      (f.comment && (f.comment.comments || []).length) ||
+      (f.attachment && f.attachment.length)
+    );
+  }
+
+  // Returns the blocks for the "## Subtasks" section. Two shapes, picked from
+  // the data rather than a flag: a flat list while all we have is stubs, a
+  // section per subtask once bodies are available.
+  function renderSubtasks(subtasks, ctx) {
+    const out = ['## Subtasks'];
+
+    if (!subtasks.some(subtaskHasBody)) {
+      out.push(
+        subtasks
+          .map((s) => {
+            const f = s.fields || {};
+            const status = (f.status && f.status.name) || '';
+            return `- ${s.key} — ${f.summary || ''}${status ? ` _(${status})_` : ''}`;
+          })
+          .join('\n')
+      );
+      return out;
+    }
+
+    // Subtask bodies sit under an h3, so their own headings start at h4 and
+    // never collide with the host document's outline.
+    const baseBodyOpts = { ...ctx.convOpts, headingOffset: 3 };
+
+    for (const s of subtasks) {
+      const f = s.fields || {};
+      const label =
+        ctx.baseUrl && s.key ? `[${s.key}](${ctx.baseUrl}/browse/${s.key})` : s.key || '';
+      out.push(`### ${label}${f.summary ? ` — ${f.summary}` : ''}`.trim());
+
+      const bits = [];
+      const addBit = (name, val) => {
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          bits.push(`**${name}:** ${String(val).replace(/\n+/g, ' ')}`);
+        }
+      };
+      addBit('Type', f.issuetype && f.issuetype.name);
+      addBit('Status', f.status && f.status.name);
+      addBit('Priority', f.priority && f.priority.name);
+      addBit('Assignee', f.assignee ? person(f.assignee) : '');
+      addBit('Resolution', f.resolution && f.resolution.name);
+      addBit('Due', fmtDate(f.duedate));
+      addBit('Labels', (f.labels || []).join(', '));
+      if (bits.length) out.push(bits.join(' · '));
+
+      // Inline images in a subtask description reference that subtask's own
+      // attachments, not the parent's, so resolve against its list when we
+      // have one.
+      const atts = f.attachment || [];
+      const bodyOpts = atts.length
+        ? { ...baseBodyOpts, mediaResolver: buildMediaResolver(atts, ctx.baseUrl) }
+        : baseBodyOpts;
+
+      const body = renderDoc(f.description, bodyOpts);
+      if (body) out.push(body);
+
+      if (atts.length) {
+        out.push('#### Attachments');
+        out.push(atts.map((a) => attachmentLine(a, ctx.baseUrl)).join('\n'));
+      }
+
+      const comments = (ctx.includeComments && f.comment && f.comment.comments) || [];
+      if (comments.length) {
+        out.push('#### Comments');
+        for (const c of comments) {
+          out.push(`**${person(c.author)} — ${fmtDate(c.created)}**\n\n${renderDoc(c.body, bodyOpts)}`);
+        }
+      }
+    }
+
+    return out;
+  }
+
   function jiraIssueToMarkdown(issue, options) {
     options = options || {};
     const includeComments = options.includeComments !== false;
     const includeCustomFields = options.includeCustomFields !== false;
+    const includeSubtasks = options.includeSubtasks !== false;
     const fields = (issue && issue.fields) || {};
     const names = issue && issue.names ? issue.names : {}; // present when expand=names
     const baseUrl = options.baseUrl || '';
@@ -198,15 +314,7 @@
       out.push(descMd);
     }
 
-    // ---- Subtasks & linked issues ----
-    if (fields.subtasks && fields.subtasks.length) {
-      out.push('## Subtasks');
-      out.push(
-        fields.subtasks
-          .map((s) => `- ${s.key} — ${(s.fields && s.fields.summary) || ''} _(${(s.fields && s.fields.status && s.fields.status.name) || ''})_`)
-          .join('\n')
-      );
-    }
+    // ---- Linked issues ----
     if (fields.issuelinks && fields.issuelinks.length) {
       const links = fields.issuelinks
         .map((l) => {
@@ -244,15 +352,7 @@
     // ---- Attachments ----
     if (attachments.length) {
       out.push('## Attachments');
-      out.push(
-        attachments
-          .map((a) => {
-            const href = a.content || (baseUrl ? `${baseUrl}/secure/attachment/${a.id}/${encodeURIComponent(a.filename || '')}` : '');
-            const size = a.size ? ` (${formatBytes(a.size)})` : '';
-            return href ? `- [${a.filename}](${href})${size}` : `- ${a.filename}${size}`;
-          })
-          .join('\n')
-      );
+      out.push(attachments.map((a) => attachmentLine(a, baseUrl)).join('\n'));
     }
 
     // ---- Comments ----
@@ -263,6 +363,22 @@
         const when = fmtDate(c.created);
         const body = adfToMarkdown(c.body, convOpts);
         out.push(`### ${author} — ${when}\n\n${body}`);
+      }
+    }
+
+    // ---- Subtasks ----
+    // Last on purpose. Every other section is a fact *about this issue* and
+    // fits on a line or two; a subtask carries whole nested documents of its
+    // own (description, comments, attachments). Placed mid-document it splits
+    // the parent's own content in half, so the parent reads start to finish
+    // first and the descent into children comes after.
+    if (includeSubtasks && fields.subtasks && fields.subtasks.length) {
+      for (const block of renderSubtasks(fields.subtasks, {
+        baseUrl,
+        convOpts,
+        includeComments,
+      })) {
+        out.push(block);
       }
     }
 
@@ -280,5 +396,5 @@
     return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
   }
 
-  return { jiraIssueToMarkdown, renderFieldValue, buildMediaResolver };
+  return { jiraIssueToMarkdown, renderFieldValue, buildMediaResolver, renderSubtasks };
 });
