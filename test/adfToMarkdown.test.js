@@ -298,3 +298,17 @@ test('strip: a trailing hard break keeps its two significant spaces', () => {
   const adf = doc(p(t('a'), { type: 'hardBreak' }, t('b'), t('c', [{ type: 'strike' }])));
   assert.equal(adfToMarkdown(adf, STRIP), 'a  \nb');
 });
+
+test('headingOffset demotes headings and clamps at h6', () => {
+  const adf = {
+    type: 'doc',
+    version: 1,
+    content: [
+      { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'One' }] },
+      { type: 'heading', attrs: { level: 5 }, content: [{ type: 'text', text: 'Five' }] },
+    ],
+  };
+  assert.match(adfToMarkdown(adf, { headingOffset: 3 }), /^#### One$/m);
+  assert.match(adfToMarkdown(adf, { headingOffset: 3 }), /^###### Five$/m);
+  assert.match(adfToMarkdown(adf), /^# One$/m, 'default is unchanged');
+});

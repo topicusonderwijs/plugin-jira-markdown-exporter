@@ -56,15 +56,21 @@ into faithful Markdown, entirely in your browser.
   lozenges, inline cards, and inline media.
 - **Full issue, not just the description** — title, type, status, assignee,
   labels, custom fields, comments, and attachments.
+- **Subtasks with their bodies** — Jira's issue payload only embeds a subtask
+  *stub* (key, summary, status), so the extension pulls the real thing in one
+  follow-up JQL query and renders a section per subtask, description, comments
+  and attachments included. **Subtasks** off drops the section altogether;
+  **Subtask details** off keeps a one-line summary per subtask and skips the
+  extra request.
 - **No API token** — authenticates with your existing Jira session cookies.
 - **Copy or download** — copy to clipboard, save `{ISSUE}.md`, or save the
   Markdown plus every attachment into a self-contained `{ISSUE}/` folder.
 - **Strip strikethrough** — optionally remove struck-through text *and its
   content*, so "we decided against this" can't be misread as current intent by
   an LLM that ignores the `~~` markers.
-- **Remembers your choices** — the comments / custom fields / strikethrough /
-  attachments toggles persist between sessions, and the in-page **Copy
-  Markdown** button honours them too.
+- **Remembers your choices** — the comments / custom fields / subtasks /
+  subtask details / strikethrough / attachments toggles persist between
+  sessions, and the in-page **Copy Markdown** button honours them too.
 - **Works in the board detail panel** — detects the issue from `?selectedIssue=`,
   not just full-page `/browse/` views.
 - **Graceful fallback** — scrapes the rendered DOM when the REST API is
@@ -131,8 +137,9 @@ with the irrelevant manifest key stripped (see [Development](#development)).
    **detail panel** (`…?selectedIssue=ABC-123`).
 2. Click the extension icon. The popup shows the issue key, type, status, and
    comment/attachment counts.
-3. Toggle what to include: **Comments**, **Custom fields**, **Strikethrough
-   text**, **Attachments**.
+3. Toggle what to include: **Comments**, **Custom fields**, **Subtasks** (and
+   nested under it, **Subtask details**), **Strikethrough text**,
+   **Attachments**.
 4. Choose an action:
    - **Copy** — Markdown goes straight to your clipboard.
    - **Download** — saves `{ISSUE}.md`; with **Attachments** on, you get an
@@ -288,7 +295,10 @@ jira-markdown-exporter/
 
 - Inline-image links in the Markdown point to Jira URLs (online); the downloaded
   local copies aren't yet referenced from the `.md`.
-- The DOM-scraping fallback is best-effort and depends on Jira's current markup.
+- The DOM-scraping fallback is best-effort and depends on Jira's current markup;
+  it yields no subtask details.
+- **Subtask details** covers the first 50 subtasks of an issue, one level deep —
+  a subtask's own subtasks are not followed.
 - Very old Data Center wiki markup is passed through rather than fully re-parsed
   (use the DOM fallback there). Consequently **Strikethrough text** has no effect
   on wiki-markup fields — `-struck-` there is indistinguishable from ordinary

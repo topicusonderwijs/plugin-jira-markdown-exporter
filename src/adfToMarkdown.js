@@ -26,6 +26,9 @@
  *         intent. Because we drop it here — while the marks are still on the
  *         node — no pattern-matching over finished Markdown is needed, so a
  *         literal "~~" in prose or inside a code block is never touched.
+ *   - headingOffset        -> integer (default 0), added to every heading level so
+ *         an ADF document can be nested under a heading of the host document
+ *         without its own h1 breaking the outline. Clamped to 1..6.
  */
 (function (root, factory) {
   const api = factory();
@@ -249,7 +252,8 @@
         return renderInline(node.content, options);
 
       case 'heading': {
-        const level = Math.min(6, Math.max(1, (node.attrs && node.attrs.level) || 1));
+        const offset = (options && options.headingOffset) || 0;
+        const level = Math.min(6, Math.max(1, ((node.attrs && node.attrs.level) || 1) + offset));
         const text = renderInline(node.content, options);
         // An empty heading is just a bare "###" — drop it. (Happens when the
         // whole heading was struck through and strikethrough is stripped.)

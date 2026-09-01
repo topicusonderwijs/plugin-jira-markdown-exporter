@@ -121,6 +121,109 @@
     throw lastError || new Error('Failed to reach the Jira REST API.');
   }
 
+  // ---- subtask details -----------------------------------------------------
+  //
+  // The parent payload's `subtasks` array is a stub: id/key/self plus summary,
+  // status, priority and issuetype. No `expand` or `fields` value on the issue
+  // request widens it, so real subtask bodies need a follow-up call.
+
+  const SUBTASK_FIELDS = [
+    'summary',
+    'issuetype',
+    'status',
+    'priority',
+    'assignee',
+    'resolution',
+    'duedate',
+    'labels',
+    'description',
+    'attachment',
+    'comment',
+  ].join(',');
+
+  // Caps both the search page size and the number of per-issue fallback
+  // requests, so a parent with a hundred subtasks can't stall an export.
+  const SUBTASK_LIMIT = 50;
+
+  async function fetchJson(url) {
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  // Every subtask of the parent in one round trip. Jira Cloud retired
+  // /rest/api/3/search in 2025 in favour of /search/jql; Data Center (v2) only
+  // ever had /search.
+  async function searchSubtasks(parentKey, version) {
+    const jql = encodeURIComponent(`parent = "${parentKey}"`);
+    const path = version === '3' ? 'search/jql' : 'search';
+    const url = `${getBaseUrl()}/rest/api/${version}/${path}?jql=${jql}&fields=${SUBTASK_FIELDS}&maxResults=${SUBTASK_LIMIT}`;
+    const json = await fetchJson(url);
+    return (json && json.issues) || [];
+  }
+
+  // One request per subtask. Slower, but it works wherever the issue endpoint
+  // works — used when the JQL search is unavailable or comes back empty.
+  async function fetchSubtasksIndividually(stubs, version) {
+    const results = await Promise.all(
+      stubs.map((s) =>
+        fetchJson(
+          `${getBaseUrl()}/rest/api/${version}/issue/${encodeURIComponent(
+            s.key
+          )}?fields=${SUBTASK_FIELDS}`
+        ).catch(() => null)
+      )
+    );
+    return results.filter(Boolean);
+  }
+
+  // Merge fetched fields into the parent's subtask stubs, in place. That is all
+  // jiraToMarkdown needs: it renders a section per subtask instead of a flat
+  // list purely because the bodies are present.
+  //
+  // Failure is never fatal — the stubs stay as they were and the export falls
+  // back to the flat list — but it is always *reported*, via the returned
+  // `error`. Silent degradation is indistinguishable from subtasks that simply
+  // have no description, which makes the feature look broken when it worked
+  // and fine when it didn't.
+  async function enrichSubtasks(parentKey, subtasks, version) {
+    const stubs = subtasks.slice(0, SUBTASK_LIMIT).filter((s) => s && s.key);
+    if (!stubs.length) return { enriched: 0, error: null, skipped: 0 };
+
+    let fetched = [];
+    let error = null;
+    try {
+      fetched = await searchSubtasks(parentKey, version);
+    } catch (err) {
+      error = err && err.message ? err.message : String(err);
+      fetched = [];
+    }
+    if (!fetched.length) {
+      fetched = await fetchSubtasksIndividually(stubs, version);
+      if (fetched.length) error = null; // the fallback covered for the search
+    }
+
+    const byKey = new Map(fetched.filter((i) => i && i.key).map((i) => [i.key, i.fields || {}]));
+    let enriched = 0;
+    for (const stub of stubs) {
+      const extra = byKey.get(stub.key);
+      if (!extra) continue;
+      stub.fields = { ...(stub.fields || {}), ...extra };
+      enriched++;
+    }
+
+    if (!enriched && !error) error = 'no subtask data returned';
+    return {
+      enriched,
+      error: enriched ? null : error,
+      skipped: subtasks.length - stubs.length,
+    };
+  }
+
   // Extract the lightweight fields the popup shows as chips/counts, so it can
   // render an issue summary without re-parsing the whole payload.
   function buildMeta(f, attachments) {
@@ -152,10 +255,26 @@
     const baseUrl = getBaseUrl();
     try {
       const { json, version } = await fetchIssueJson(key);
+
+      // Pull real subtask bodies before rendering (see enrichSubtasks).
+      const subtasks = (json.fields && json.fields.subtasks) || [];
+      const wantSubtaskDetails =
+        options.includeSubtasks !== false && options.includeSubtaskDetails !== false;
+      let subtaskWarning = null;
+      if (wantSubtaskDetails && subtasks.length) {
+        const result = await enrichSubtasks(json.key || key, subtasks, version);
+        if (result.error) {
+          subtaskWarning = `Subtask details unavailable (${result.error}); listed ${subtasks.length} subtask(s) without their bodies.`;
+        } else if (result.skipped > 0) {
+          subtaskWarning = `Detailed the first ${SUBTASK_LIMIT} subtasks; ${result.skipped} more were listed without their bodies.`;
+        }
+      }
+
       const markdown = self.jiraIssueToMarkdown(json, {
         baseUrl,
         includeComments: options.includeComments !== false,
         includeCustomFields: options.includeCustomFields !== false,
+        includeSubtasks: options.includeSubtasks !== false,
         includeStrikethrough: options.includeStrikethrough !== false,
       });
       const attachments = (json.fields && json.fields.attachment) || [];
@@ -165,6 +284,7 @@
         key: json.key || key,
         markdown,
         meta: buildMeta(json.fields || {}, attachments),
+        warning: subtaskWarning || undefined,
         attachments: attachments.map((a) => ({
           id: a.id,
           filename: a.filename,

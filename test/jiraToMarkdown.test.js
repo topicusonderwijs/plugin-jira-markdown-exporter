@@ -168,3 +168,174 @@ test('includeStrikethrough:false strips struck text from every ADF field', () =>
   assert.doesNotMatch(md, /scrapped/);
   assert.match(md, /agreed/);
 });
+
+// ---- subtasks ---------------------------------------------------------------
+//
+// The parent payload's `subtasks` array is a stub; content.js merges richer
+// fields into it from a follow-up request. Both states must render sensibly.
+
+const subtaskStub = (key, summary) => ({
+  id: key,
+  key,
+  fields: {
+    summary,
+    status: { name: 'New', statusCategory: { key: 'new' } },
+    priority: { name: 'None' },
+    issuetype: { name: 'Sub-task', subtask: true },
+  },
+});
+
+const parentWithSubtasks = (subtasks) => ({
+  key: 'EFK-3621',
+  fields: {
+    summary: 'test van pim',
+    issuetype: { name: 'Bug' },
+    status: { name: 'New' },
+    subtasks,
+  },
+});
+
+const doc = (...blocks) => ({ type: 'doc', version: 1, content: blocks });
+const para = (text) => ({ type: 'paragraph', content: [{ type: 'text', text }] });
+
+test('stub-only subtasks render as a flat list', () => {
+  const md = jiraIssueToMarkdown(parentWithSubtasks([
+    subtaskStub('EFK-3622', 'Task A'),
+    subtaskStub('EFK-3623', 'Task B'),
+  ]), { baseUrl: 'https://acme.atlassian.net' });
+
+  assert.match(md, /## Subtasks/);
+  assert.match(md, /- EFK-3622 — Task A _\(New\)_/);
+  assert.match(md, /- EFK-3623 — Task B _\(New\)_/);
+  assert.ok(!md.includes('### EFK-3622'), 'no per-subtask sections without bodies');
+});
+
+test('enriched subtasks render a linked section each, with meta line', () => {
+  const enriched = subtaskStub('EFK-3622', 'Task A');
+  enriched.fields.assignee = { displayName: 'Pim Jansen' };
+  enriched.fields.labels = ['backend'];
+  enriched.fields.description = doc(para('Do the thing.'));
+
+  const md = jiraIssueToMarkdown(
+    parentWithSubtasks([enriched, subtaskStub('EFK-3623', 'Task B')]),
+    { baseUrl: 'https://acme.atlassian.net' }
+  );
+
+  assert.match(md, /### \[EFK-3622\]\(https:\/\/acme\.atlassian\.net\/browse\/EFK-3622\) — Task A/);
+  assert.match(md, /\*\*Type:\*\* Sub-task · \*\*Status:\*\* New · \*\*Priority:\*\* None · \*\*Assignee:\*\* Pim Jansen · \*\*Labels:\*\* backend/);
+  assert.match(md, /Do the thing\./);
+  // A stub alongside an enriched sibling still gets its own section.
+  assert.match(md, /### \[EFK-3623\]\(.*\) — Task B/);
+});
+
+test('subtask description headings are demoted below the subtask heading', () => {
+  const enriched = subtaskStub('EFK-3622', 'Task A');
+  enriched.fields.description = doc(
+    { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Steps' }] },
+    para('First.'),
+    { type: 'heading', attrs: { level: 4 }, content: [{ type: 'text', text: 'Deep' }] }
+  );
+
+  const md = jiraIssueToMarkdown(parentWithSubtasks([enriched]), { baseUrl: 'https://x.test' });
+
+  assert.match(md, /^#### Steps$/m, 'h1 becomes h4');
+  assert.match(md, /^###### Deep$/m, 'h4 clamps at h6');
+  assert.ok(!/^# Steps$/m.test(md), 'never competes with the document title');
+});
+
+test('subtask comments and attachments are rendered; includeComments:false drops the comments', () => {
+  const enriched = subtaskStub('EFK-3622', 'Task A');
+  enriched.fields.description = doc(para('Body.'));
+  enriched.fields.attachment = [
+    { id: '9', filename: 'log.txt', content: 'https://x.test/log.txt', size: 2048 },
+  ];
+  enriched.fields.comment = {
+    total: 1,
+    comments: [
+      {
+        author: { displayName: 'Pim Jansen' },
+        created: '2026-08-31T16:20:00.000+0200',
+        body: doc(para('Looks good.')),
+      },
+    ],
+  };
+  const issue = parentWithSubtasks([enriched]);
+
+  const md = jiraIssueToMarkdown(issue, { baseUrl: 'https://x.test' });
+  assert.match(md, /#### Attachments\n\n- \[log\.txt\]\(https:\/\/x\.test\/log\.txt\) \(2\.0 KB\)/);
+  assert.match(md, /#### Comments/);
+  assert.match(md, /\*\*Pim Jansen — 2026-08-31 \d\d:20\*\*\n\nLooks good\./);
+
+  const without = jiraIssueToMarkdown(issue, {
+    baseUrl: 'https://x.test',
+    includeComments: false,
+  });
+  assert.ok(!without.includes('#### Comments'), 'subtask comments follow includeComments');
+  assert.match(without, /#### Attachments/, 'attachments are unaffected');
+});
+
+test('a wiki-markup (v2) subtask description passes through as text', () => {
+  const enriched = subtaskStub('EFK-3622', 'Task A');
+  enriched.fields.description = 'h2. Plain wiki text\n';
+
+  const md = jiraIssueToMarkdown(parentWithSubtasks([enriched]), {});
+  assert.match(md, /h2\. Plain wiki text/);
+  assert.match(md, /### EFK-3622 — Task A/, 'no baseUrl → unlinked key');
+});
+
+test('a date-only field renders as a date, not a shifted timestamp', () => {
+  const md = jiraIssueToMarkdown(
+    { key: 'EFK-1', fields: { summary: 'x', duedate: '2026-09-04' } },
+    {}
+  );
+  assert.match(md, /\| Due \| 2026-09-04 \|/);
+  assert.ok(!md.includes('2026-09-04 0'), 'no invented time component');
+});
+
+test('includeSubtasks:false drops the Subtasks section entirely', () => {
+  const enriched = subtaskStub('EFK-3622', 'Task A');
+  enriched.fields.description = doc(para('Do the thing.'));
+  const issue = parentWithSubtasks([enriched, subtaskStub('EFK-3623', 'Task B')]);
+  const opts = { baseUrl: 'https://x.test', includeSubtasks: false };
+
+  const md = jiraIssueToMarkdown(issue, opts);
+  assert.ok(!md.includes('## Subtasks'), 'no section heading');
+  assert.ok(!md.includes('EFK-3622'), 'no subtask keys');
+  assert.ok(!md.includes('Do the thing.'), 'no subtask bodies');
+  assert.match(md, /# EFK-3621: test van pim/, 'the rest of the issue survives');
+
+  // Default stays on.
+  assert.match(jiraIssueToMarkdown(issue, { baseUrl: 'https://x.test' }), /## Subtasks/);
+});
+
+test('subtasks come last, after every section about the parent itself', () => {
+  const enriched = subtaskStub('EFK-3622', 'Task A');
+  enriched.fields.description = doc(para('Subtask body.'));
+  const issue = parentWithSubtasks([enriched]);
+  Object.assign(issue.fields, {
+    description: doc(para('Parent body.')),
+    attachment: [{ id: '1', filename: 'parent.png', content: 'https://x.test/p.png' }],
+    comment: {
+      comments: [
+        { author: { displayName: 'Pim Jansen' }, created: '2026-08-31T16:20:00.000+0200', body: doc(para('Parent comment.')) },
+      ],
+    },
+    issuelinks: [
+      { type: { outward: 'blocks' }, outwardIssue: { key: 'EFK-9', fields: { summary: 'Other' } } },
+    ],
+    customfield_10111: { value: 'Low' },
+  });
+
+  const md = jiraIssueToMarkdown(issue, { baseUrl: 'https://x.test' });
+  const at = (heading) => md.indexOf(heading);
+
+  for (const heading of ['## Description', '## Linked Issues', '## Other Fields', '## Attachments', '## Comments', '## Subtasks']) {
+    assert.ok(at(heading) !== -1, `${heading} is present`);
+  }
+  assert.ok(at('## Subtasks') > at('## Comments'), 'subtasks after the parent comments');
+  assert.ok(at('## Subtasks') > at('## Attachments'), 'subtasks after the parent attachments');
+  assert.ok(at('## Subtasks') > at('## Other Fields'), 'subtasks after the parent fields');
+  assert.ok(at('## Subtasks') > at('## Linked Issues'), 'subtasks after the linked issues');
+  // The parent's own comment must not be stranded below a subtask body.
+  assert.ok(md.indexOf('Parent comment.') < md.indexOf('Subtask body.'));
+});
