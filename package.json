@@ -1,6 +1,6 @@
 {
   "name": "plugin-jira-markdown-exporter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Open-source Manifest V3 browser extension (Chrome + Firefox) that exports Jira Cloud issues to clean Markdown. No telemetry, no API tokens — uses your existing browser session.",
   "license": "MIT",
   "author": "Adnan al Jawabra",

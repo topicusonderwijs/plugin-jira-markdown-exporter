@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Jira Markdown Exporter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Export Jira Cloud issues to clean Markdown. Open source, no telemetry, uses your existing Jira session.",
   "homepage_url": "https://github.com/topicusonderwijs/plugin-jira-markdown-exporter",
   "permissions": ["activeTab", "scripting", "downloads", "clipboardWrite", "storage"],
